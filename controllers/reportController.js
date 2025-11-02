@@ -22,13 +22,21 @@ export const getDashboardStats = async (req, res) => {
     const User = (await import('../models/User.js')).default;
     const totalAdmins = await User.countDocuments({ role: { $in: ['admin', 'super'] } });
 
+    // Get total expenditures
+    const Expenditure = (await import('../models/Expenditure.js')).default;
+    const expenditures = await Expenditure.find();
+    const totalSpent = expenditures.reduce((sum, exp) => sum + exp.amount, 0);
+    const balanceRemaining = totalCollected - totalSpent;
+
     // Monthly income trend (last 12 months)
     const monthlyIncome = {};
+    const monthlyExpenditure = {};
     const now = new Date();
     for (let i = 11; i >= 0; i--) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       monthlyIncome[monthKey] = 0;
+      monthlyExpenditure[monthKey] = 0;
     }
 
     members.forEach(member => {
@@ -41,12 +49,23 @@ export const getDashboardStats = async (req, res) => {
       });
     });
 
+    expenditures.forEach(exp => {
+      const expDate = new Date(exp.date);
+      const monthKey = `${expDate.getFullYear()}-${String(expDate.getMonth() + 1).padStart(2, '0')}`;
+      if (monthlyExpenditure[monthKey] !== undefined) {
+        monthlyExpenditure[monthKey] += exp.amount;
+      }
+    });
+
     res.json({
       totalMembers,
       totalCollected,
+      totalSpent,
+      balanceRemaining,
       membersInArrears: membersInArrearsCount,
       totalAdmins,
-      monthlyIncome: Object.entries(monthlyIncome).map(([month, amount]) => ({ month, amount }))
+      monthlyIncome: Object.entries(monthlyIncome).map(([month, amount]) => ({ month, amount })),
+      monthlyExpenditure: Object.entries(monthlyExpenditure).map(([month, amount]) => ({ month, amount }))
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

@@ -1,9 +1,18 @@
 import Member from '../models/Member.js';
 import ActivityLog from '../models/ActivityLog.js';
+import Receipt from '../models/Receipt.js';
+
+// Generate unique receipt ID
+const generateReceiptId = () => {
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const randomSuffix = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
+  return `RCT${dateStr}-${randomSuffix}`;
+};
 
 export const recordPayment = async (req, res) => {
   try {
-    const { memberId, amount, date } = req.body;
+    const { memberId, amount, date, remarks } = req.body;
 
     if (!memberId || !amount) {
       return res.status(400).json({ error: 'Member ID and amount are required' });
@@ -19,12 +28,13 @@ export const recordPayment = async (req, res) => {
     const monthsCovered = Math.floor(paymentAmount / member.duesPerMonth);
 
     // Add payment to history
-    member.paymentHistory.push({
+    const newPayment = {
       amount: paymentAmount,
       date: paymentDate,
       monthsCovered: monthsCovered,
       recordedBy: req.user.username
-    });
+    };
+    member.paymentHistory.push(newPayment);
 
     // Update member totals
     member.totalPaid += paymentAmount;
@@ -33,6 +43,32 @@ export const recordPayment = async (req, res) => {
     member.arrears = member.calculateArrears();
 
     await member.save();
+
+    // Get the saved payment ID
+    const savedPayment = member.paymentHistory[member.paymentHistory.length - 1];
+
+    // Auto-generate receipt
+    let receiptId = generateReceiptId();
+    let retries = 0;
+    while (await Receipt.findOne({ receiptId }) && retries < 10) {
+      receiptId = generateReceiptId();
+      retries++;
+    }
+
+    const receipt = new Receipt({
+      receiptId,
+      memberId: member._id,
+      memberName: member.name,
+      amount: paymentAmount,
+      duesPerMonth: member.duesPerMonth,
+      monthsCovered: monthsCovered,
+      paymentDate: paymentDate,
+      recordedBy: req.user.username,
+      recordedAt: new Date(),
+      remarks: remarks || '',
+      paymentId: savedPayment._id
+    });
+    await receipt.save();
 
     // Log activity (only for admin users)
     if (req.user.role === 'admin') {
@@ -53,6 +89,10 @@ export const recordPayment = async (req, res) => {
         date: paymentDate,
         monthsCovered: monthsCovered,
         recordedBy: req.user.username
+      },
+      receipt: {
+        receiptId: receipt.receiptId,
+        _id: receipt._id
       }
     });
   } catch (error) {
