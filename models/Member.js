@@ -1,0 +1,87 @@
+import mongoose from 'mongoose';
+
+const paymentHistorySchema = new mongoose.Schema({
+  amount: {
+    type: Number,
+    required: true
+  },
+  date: {
+    type: Date,
+    required: true,
+    default: Date.now
+  },
+  monthsCovered: {
+    type: Number,
+    required: true
+  },
+  recordedBy: {
+    type: String,
+    required: true
+  }
+});
+
+const memberSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  memberId: {
+    type: String,
+    unique: true,
+    sparse: true,
+    trim: true
+  },
+  contact: {
+    type: String,
+    trim: true
+  },
+  joinDate: {
+    type: Date,
+    required: true,
+    default: Date.now
+  },
+  duesPerMonth: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  totalPaid: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  monthsCovered: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  arrears: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  lastPaymentDate: {
+    type: Date
+  },
+  paymentHistory: [paymentHistorySchema]
+}, {
+  timestamps: true
+});
+
+// Method to calculate arrears
+memberSchema.methods.calculateArrears = function() {
+  const now = new Date();
+  const joinYear = this.joinDate.getFullYear();
+  const joinMonth = this.joinDate.getMonth();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  
+  const totalMonthsSinceJoin = (currentYear - joinYear) * 12 + (currentMonth - joinMonth) + 1;
+  const arrears = Math.max(0, totalMonthsSinceJoin - this.monthsCovered);
+  
+  return arrears;
+};
+
+export default mongoose.model('Member', memberSchema);
+

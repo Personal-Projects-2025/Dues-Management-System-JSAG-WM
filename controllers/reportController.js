@@ -1,0 +1,124 @@
+import Member from '../models/Member.js';
+import { exportMembersToExcel, exportPaymentsToExcel } from '../utils/excelExporter.js';
+import { generateReportPDF } from '../utils/pdfGenerator.js';
+
+export const getDashboardStats = async (req, res) => {
+  try {
+    const members = await Member.find();
+    const totalMembers = members.length;
+    
+    let totalCollected = 0;
+    let membersInArrearsCount = 0;
+    
+    members.forEach(member => {
+      totalCollected += member.totalPaid;
+      member.arrears = member.calculateArrears();
+      if (member.arrears > 0) {
+        membersInArrearsCount++;
+      }
+    });
+
+    // Get total admins
+    const User = (await import('../models/User.js')).default;
+    const totalAdmins = await User.countDocuments({ role: { $in: ['admin', 'super'] } });
+
+    // Monthly income trend (last 12 months)
+    const monthlyIncome = {};
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      monthlyIncome[monthKey] = 0;
+    }
+
+    members.forEach(member => {
+      member.paymentHistory.forEach(payment => {
+        const paymentDate = new Date(payment.date);
+        const monthKey = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}`;
+        if (monthlyIncome[monthKey] !== undefined) {
+          monthlyIncome[monthKey] += payment.amount;
+        }
+      });
+    });
+
+    res.json({
+      totalMembers,
+      totalCollected,
+      membersInArrears: membersInArrearsCount,
+      totalAdmins,
+      monthlyIncome: Object.entries(monthlyIncome).map(([month, amount]) => ({ month, amount }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const exportMembersReport = async (req, res) => {
+  try {
+    const { format } = req.query;
+    const members = await Member.find().sort({ name: 1 });
+
+    if (format === 'excel') {
+      const buffer = await exportMembersToExcel(members);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename=members-report.xlsx');
+      res.send(buffer);
+    } else if (format === 'pdf') {
+      const pdfBuffer = await generateReportPDF({ members }, 'Members Report');
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename=members-report.pdf');
+      res.send(pdfBuffer);
+    } else {
+      res.json(members);
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const exportPaymentsReport = async (req, res) => {
+  try {
+    const { format, startDate, endDate, memberId, recordedBy } = req.query;
+
+    let query = {};
+    if (memberId) {
+      query._id = memberId;
+    }
+
+    const members = await Member.find(query);
+    let allPayments = [];
+
+    members.forEach(member => {
+      member.paymentHistory.forEach(payment => {
+        if (startDate && new Date(payment.date) < new Date(startDate)) return;
+        if (endDate && new Date(payment.date) > new Date(endDate)) return;
+        if (recordedBy && payment.recordedBy !== recordedBy) return;
+
+        allPayments.push({
+          memberName: member.name,
+          amount: payment.amount,
+          date: payment.date,
+          monthsCovered: payment.monthsCovered,
+          recordedBy: payment.recordedBy
+        });
+      });
+    });
+
+    if (format === 'excel') {
+      const buffer = await exportPaymentsToExcel(allPayments);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename=payments-report.xlsx');
+      res.send(buffer);
+    } else if (format === 'pdf') {
+      const pdfBuffer = await generateReportPDF({ payments: allPayments }, 'Payments Report');
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename=payments-report.pdf');
+      res.send(pdfBuffer);
+    } else {
+      res.json(allPayments);
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
