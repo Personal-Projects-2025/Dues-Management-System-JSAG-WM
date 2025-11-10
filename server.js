@@ -11,6 +11,7 @@ import reportRoutes from './routes/reportRoutes.js';
 import logRoutes from './routes/logRoutes.js';
 import receiptRoutes from './routes/receiptRoutes.js';
 import expenditureRoutes from './routes/expenditureRoutes.js';
+import subgroupRoutes from './routes/subgroupRoutes.js';
 
 dotenv.config();
 
@@ -35,6 +36,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/logs', logRoutes);
 app.use('/api/receipts', receiptRoutes);
 app.use('/api/expenditure', expenditureRoutes);
+app.use('/api/subgroups', subgroupRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

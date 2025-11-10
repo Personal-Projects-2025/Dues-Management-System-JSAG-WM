@@ -28,6 +28,58 @@ export const getDashboardStats = async (req, res) => {
     const totalSpent = expenditures.reduce((sum, exp) => sum + exp.amount, 0);
     const balanceRemaining = totalCollected - totalSpent;
 
+    // Subgroup performance
+    const Subgroup = (await import('../models/Subgroup.js')).default;
+    const subgroups = await Subgroup.find().lean();
+    const subgroupTotals = new Map();
+
+    members.forEach(member => {
+      const key = member.subgroupId ? member.subgroupId.toString() : 'unassigned';
+      if (!subgroupTotals.has(key)) {
+        subgroupTotals.set(key, { totalCollected: 0, memberCount: 0 });
+      }
+      const stat = subgroupTotals.get(key);
+      stat.totalCollected += member.totalPaid;
+      stat.memberCount += 1;
+    });
+
+    const subgroupStats = subgroups.map(subgroup => {
+      const key = subgroup._id.toString();
+      const stat = subgroupTotals.get(key) || { totalCollected: 0, memberCount: 0 };
+      const leaderMember = subgroup.leaderId
+        ? members.find(member => member._id.toString() === subgroup.leaderId.toString())
+        : null;
+      return {
+        id: subgroup._id,
+        name: subgroup.name,
+        leader: leaderMember
+          ? {
+              id: leaderMember._id,
+              name: leaderMember.name,
+              memberId: leaderMember.memberId
+            }
+          : null,
+        totalCollected: stat.totalCollected,
+        totalMembers: stat.memberCount,
+        averagePerMember: stat.memberCount > 0 ? stat.totalCollected / stat.memberCount : 0
+      };
+    });
+
+    if (subgroupTotals.has('unassigned')) {
+      const stat = subgroupTotals.get('unassigned');
+      subgroupStats.push({
+        id: 'unassigned',
+        name: 'Unassigned',
+        leader: null,
+        totalCollected: stat.totalCollected,
+        totalMembers: stat.memberCount,
+        averagePerMember: stat.memberCount > 0 ? stat.totalCollected / stat.memberCount : 0
+      });
+    }
+
+    subgroupStats.sort((a, b) => b.totalCollected - a.totalCollected);
+    const topSubgroup = subgroupStats.length > 0 ? subgroupStats[0] : null;
+
     // Monthly income trend (last 12 months)
     const monthlyIncome = {};
     const monthlyExpenditure = {};
@@ -65,7 +117,9 @@ export const getDashboardStats = async (req, res) => {
       membersInArrears: membersInArrearsCount,
       totalAdmins,
       monthlyIncome: Object.entries(monthlyIncome).map(([month, amount]) => ({ month, amount })),
-      monthlyExpenditure: Object.entries(monthlyExpenditure).map(([month, amount]) => ({ month, amount }))
+      monthlyExpenditure: Object.entries(monthlyExpenditure).map(([month, amount]) => ({ month, amount })),
+      subgroupStats,
+      topSubgroup
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

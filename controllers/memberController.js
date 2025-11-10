@@ -1,9 +1,10 @@
 import Member from '../models/Member.js';
 import ActivityLog from '../models/ActivityLog.js';
+import Subgroup from '../models/Subgroup.js';
 
 export const getAllMembers = async (req, res) => {
   try {
-    const { search } = req.query;
+    const { search, role } = req.query;
     let query = {};
 
     if (search) {
@@ -16,7 +17,13 @@ export const getAllMembers = async (req, res) => {
       };
     }
 
-    const members = await Member.find(query).sort({ createdAt: -1 });
+    if (role) {
+      query.role = role;
+    }
+
+    const members = await Member.find(query)
+      .populate('subgroupId', 'name')
+      .sort({ createdAt: -1 });
     
     // Calculate arrears for each member
     const membersWithArrears = members.map(member => {
@@ -33,7 +40,7 @@ export const getAllMembers = async (req, res) => {
 
 export const getMemberById = async (req, res) => {
   try {
-    const member = await Member.findById(req.params.id);
+    const member = await Member.findById(req.params.id).populate('subgroupId', 'name');
     if (!member) {
       return res.status(404).json({ error: 'Member not found' });
     }
@@ -47,10 +54,19 @@ export const getMemberById = async (req, res) => {
 
 export const createMember = async (req, res) => {
   try {
-    const { name, memberId, contact, joinDate, duesPerMonth } = req.body;
+    const { name, memberId, contact, joinDate, duesPerMonth, subgroupId, role } = req.body;
 
     if (!name || !duesPerMonth) {
       return res.status(400).json({ error: 'Name and dues per month are required' });
+    }
+
+    let resolvedSubgroupId = null;
+    if (subgroupId) {
+      const subgroup = await Subgroup.findById(subgroupId);
+      if (!subgroup) {
+        return res.status(400).json({ error: 'Invalid subgroup selected' });
+      }
+      resolvedSubgroupId = subgroupId;
     }
 
     const member = new Member({
@@ -61,7 +77,9 @@ export const createMember = async (req, res) => {
       duesPerMonth: parseFloat(duesPerMonth),
       totalPaid: 0,
       monthsCovered: 0,
-      arrears: 0
+      arrears: 0,
+      subgroupId: resolvedSubgroupId,
+      role: role && ['member', 'admin'].includes(role) ? role : 'member'
     });
 
     await member.save();
@@ -88,7 +106,7 @@ export const createMember = async (req, res) => {
 
 export const updateMember = async (req, res) => {
   try {
-    const { name, memberId, contact, joinDate, duesPerMonth } = req.body;
+    const { name, memberId, contact, joinDate, duesPerMonth, subgroupId, role } = req.body;
     const member = await Member.findById(req.params.id);
 
     if (!member) {
@@ -100,6 +118,21 @@ export const updateMember = async (req, res) => {
     if (contact !== undefined) member.contact = contact;
     if (joinDate) member.joinDate = new Date(joinDate);
     if (duesPerMonth) member.duesPerMonth = parseFloat(duesPerMonth);
+    if (role && ['member', 'admin'].includes(role)) {
+      member.role = role;
+    }
+
+    if (subgroupId !== undefined) {
+      if (subgroupId) {
+        const subgroup = await Subgroup.findById(subgroupId);
+        if (!subgroup) {
+          return res.status(400).json({ error: 'Invalid subgroup selected' });
+        }
+        member.subgroupId = subgroupId;
+      } else {
+        member.subgroupId = null;
+      }
+    }
 
     await member.save();
 
@@ -149,7 +182,7 @@ export const deleteMember = async (req, res) => {
 
 export const getMembersInArrears = async (req, res) => {
   try {
-    const members = await Member.find();
+    const members = await Member.find().populate('subgroupId', 'name');
     const membersInArrears = members
       .map(member => {
         member.arrears = member.calculateArrears();

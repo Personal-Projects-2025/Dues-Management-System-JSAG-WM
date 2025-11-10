@@ -32,9 +32,19 @@ const memberSchema = new mongoose.Schema({
     sparse: true,
     trim: true
   },
+  subgroupId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Subgroup',
+    default: null
+  },
   contact: {
     type: String,
     trim: true
+  },
+  role: {
+    type: String,
+    enum: ['member', 'admin'],
+    default: 'member'
   },
   joinDate: {
     type: Date,
