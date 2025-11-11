@@ -4,7 +4,8 @@ import {
   getMemberReceipts,
   getReceiptPDF,
   getReceiptById,
-  getAllReceipts
+  getAllReceipts,
+  resendReceiptEmail
 } from '../controllers/receiptController.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { requireAdmin } from '../middleware/roleMiddleware.js';
@@ -15,8 +16,9 @@ const router = express.Router();
 router.post('/generate', authenticateToken, requireAdmin, createReceipt);
 router.get('/', authenticateToken, requireAdmin, getAllReceipts);
 router.get('/member/:memberId', authenticateToken, requireAdmin, getMemberReceipts);
-router.get('/:receiptId', authenticateToken, requireAdmin, getReceiptById);
 router.get('/pdf/:receiptId', authenticateToken, requireAdmin, getReceiptPDF);
+router.post('/:receiptId/resend', authenticateToken, requireAdmin, resendReceiptEmail);
+router.get('/:receiptId', authenticateToken, requireAdmin, getReceiptById);
 
 export default router;
 

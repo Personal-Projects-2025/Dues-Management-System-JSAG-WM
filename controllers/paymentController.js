@@ -1,6 +1,9 @@
 import Member from '../models/Member.js';
 import ActivityLog from '../models/ActivityLog.js';
 import Receipt from '../models/Receipt.js';
+import { generateReceiptPDFFromReceipt } from '../utils/pdfGenerator.js';
+import { sendEmail } from '../utils/mailer.js';
+import { renderPaymentReceiptEmail, renderPaymentReceiptText } from '../utils/emailTemplates.js';
 
 // Generate unique receipt ID
 const generateReceiptId = () => {
@@ -70,6 +73,31 @@ export const recordPayment = async (req, res) => {
     });
     await receipt.save();
 
+    let receiptEmailStatus = member.email ? 'pending' : 'missing';
+
+    if (member.email) {
+      try {
+        const pdfBuffer = await generateReceiptPDFFromReceipt(receipt, member);
+        const groupName = process.env.GROUP_NAME || 'Group Dues';
+        await sendEmail({
+          to: [member.email],
+          subject: `Your Dues Payment Receipt - ${groupName}`,
+          htmlContent: renderPaymentReceiptEmail({ member, receipt }),
+          textContent: renderPaymentReceiptText({ member, receipt }),
+          attachments: [
+            {
+              name: `receipt-${receipt.receiptId}.pdf`,
+              content: pdfBuffer
+            }
+          ]
+        });
+        receiptEmailStatus = 'sent';
+      } catch (emailError) {
+        console.error('Failed to send receipt email', emailError);
+        receiptEmailStatus = 'failed';
+      }
+    }
+
     // Log activity (only for admin users)
     if (req.user.role === 'admin') {
       const log = new ActivityLog({
@@ -93,6 +121,10 @@ export const recordPayment = async (req, res) => {
       receipt: {
         receiptId: receipt.receiptId,
         _id: receipt._id
+      },
+      email: {
+        to: member.email || null,
+        status: receiptEmailStatus
       }
     });
   } catch (error) {

@@ -20,7 +20,9 @@
     "bcrypt": "^5.1.1",
     "jsonwebtoken": "^9.0.2",
     "pdfkit": "^0.14.0",
-    "exceljs": "^4.4.0"
+    "exceljs": "^4.4.0",
+    "node-cron": "^3.0.3",
+    "sib-api-v3-sdk": "^8.5.0"
   }
 }
 

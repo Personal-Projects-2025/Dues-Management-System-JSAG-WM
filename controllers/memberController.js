@@ -12,7 +12,8 @@ export const getAllMembers = async (req, res) => {
         $or: [
           { name: { $regex: search, $options: 'i' } },
           { memberId: { $regex: search, $options: 'i' } },
-          { contact: { $regex: search, $options: 'i' } }
+          { contact: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } }
         ]
       };
     }
@@ -54,11 +55,24 @@ export const getMemberById = async (req, res) => {
 
 export const createMember = async (req, res) => {
   try {
-    const { name, memberId, contact, joinDate, duesPerMonth, subgroupId, role } = req.body;
+    const {
+      name,
+      memberId,
+      contact,
+      email,
+      joinDate,
+      duesPerMonth,
+      subgroupId,
+      role
+    } = req.body;
 
-    if (!name || !duesPerMonth) {
-      return res.status(400).json({ error: 'Name and dues per month are required' });
+    if (!name || !duesPerMonth || !email) {
+      return res
+        .status(400)
+        .json({ error: 'Name, email, and dues per month are required' });
     }
+
+    const normalizedEmail = email.toLowerCase();
 
     let resolvedSubgroupId = null;
     if (subgroupId) {
@@ -73,6 +87,7 @@ export const createMember = async (req, res) => {
       name,
       memberId,
       contact,
+      email: normalizedEmail,
       joinDate: joinDate ? new Date(joinDate) : new Date(),
       duesPerMonth: parseFloat(duesPerMonth),
       totalPaid: 0,
@@ -106,7 +121,16 @@ export const createMember = async (req, res) => {
 
 export const updateMember = async (req, res) => {
   try {
-    const { name, memberId, contact, joinDate, duesPerMonth, subgroupId, role } = req.body;
+    const {
+      name,
+      memberId,
+      contact,
+      email,
+      joinDate,
+      duesPerMonth,
+      subgroupId,
+      role
+    } = req.body;
     const member = await Member.findById(req.params.id);
 
     if (!member) {
@@ -116,6 +140,9 @@ export const updateMember = async (req, res) => {
     if (name) member.name = name;
     if (memberId !== undefined) member.memberId = memberId;
     if (contact !== undefined) member.contact = contact;
+    if (email !== undefined) {
+      member.email = email ? email.toLowerCase() : null;
+    }
     if (joinDate) member.joinDate = new Date(joinDate);
     if (duesPerMonth) member.duesPerMonth = parseFloat(duesPerMonth);
     if (role && ['member', 'admin'].includes(role)) {

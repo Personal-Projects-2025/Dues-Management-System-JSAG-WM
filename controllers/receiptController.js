@@ -1,6 +1,8 @@
 import Receipt from '../models/Receipt.js';
 import Member from '../models/Member.js';
 import { generateReceiptPDFFromReceipt } from '../utils/pdfGenerator.js';
+import { sendEmail } from '../utils/mailer.js';
+import { renderPaymentReceiptEmail, renderPaymentReceiptText } from '../utils/emailTemplates.js';
 
 // Generate unique receipt ID
 const generateReceiptId = () => {
@@ -118,4 +120,46 @@ export const getAllReceipts = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+export const resendReceiptEmail = async (req, res) => {
+  try {
+    const { receiptId } = req.params;
+    const receipt = await Receipt.findOne({ receiptId });
+
+    if (!receipt) {
+      return res.status(404).json({ error: 'Receipt not found' });
+    }
+
+    const member = await Member.findById(receipt.memberId);
+    if (!member) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+
+    if (!member.email) {
+      return res.status(400).json({ error: 'Member does not have an email address on file' });
+    }
+
+    const pdfBuffer = await generateReceiptPDFFromReceipt(receipt, member);
+    const groupName = process.env.GROUP_NAME || 'Group Dues';
+
+    await sendEmail({
+      to: [member.email],
+      subject: `Your Dues Payment Receipt - ${groupName}`,
+      htmlContent: renderPaymentReceiptEmail({ member, receipt }),
+      textContent: renderPaymentReceiptText({ member, receipt }),
+      attachments: [
+        {
+          name: `receipt-${receipt.receiptId}.pdf`,
+          content: pdfBuffer
+        }
+      ]
+    });
+
+    res.json({ message: 'Receipt email sent successfully' });
+  } catch (error) {
+    console.error('Failed to resend receipt email', error);
+    res.status(500).json({ error: 'Failed to send receipt email' });
+  }
+};
+
 

@@ -41,6 +41,12 @@ const memberSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  email: {
+    type: String,
+    trim: true,
+    lowercase: true,
+    match: [/^\S+@\S+\.\S+$/, 'Invalid email address']
+  },
   role: {
     type: String,
     enum: ['member', 'admin'],
