@@ -74,7 +74,18 @@ export const sendEmail = async ({
   });
 
   const apiInstance = getTransactionalApi();
-  return apiInstance.sendTransacEmail(email);
+  try {
+    const response = await apiInstance.sendTransacEmail(email);
+    return response;
+  } catch (error) {
+    const details = error?.response?.body || error;
+    console.error('Brevo email send failed', details);
+    throw new Error(
+      details?.message ||
+        details?.errors?.map((e) => e.message).join(', ') ||
+        'Failed to send email via Brevo. Check API key, sender, and recipient details.'
+    );
+  }
 };
 
 
