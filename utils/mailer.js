@@ -149,22 +149,6 @@ export const sendEmail = async (args) => {
 
   const transport = String(process.env.EMAIL_TRANSPORT || 'api').toLowerCase();
   if (transport === 'smtp') {
-    return await sendViaSmtp(args);
-  }
-  return await sendViaApi(args);
-};
-
-const canFallbackToApi = (err) => {
-  const code = err?.code;
-  const transient = ['ETIMEDOUT', 'ECONNECTION', 'EAI_AGAIN', 'ENOTFOUND'];
-  return transient.includes(code || '') && !!process.env.BREVO_API_KEY;
-};
-
-// Wrap SMTP with automatic API fallback on transient network failures
-export const sendEmailWithFallback = async (args) => {
-  const transport = String(process.env.EMAIL_TRANSPORT || 'api').toLowerCase();
-
-  if (transport === 'smtp') {
     try {
       return await sendViaSmtp(args);
     } catch (err) {
@@ -175,8 +159,13 @@ export const sendEmailWithFallback = async (args) => {
       throw err;
     }
   }
-
   return await sendViaApi(args);
+};
+
+const canFallbackToApi = (err) => {
+  const code = err?.code;
+  const transient = ['ETIMEDOUT', 'ECONNECTION', 'EAI_AGAIN', 'ENOTFOUND'];
+  return transient.includes(code || '') && !!process.env.BREVO_API_KEY;
 };
 
 
