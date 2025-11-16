@@ -33,7 +33,13 @@ const getSmtpTransporter = () => {
       host,
       port,
       secure,
-      auth: { user, pass }
+      auth: { user, pass },
+      connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS || 15000),
+      greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS || 10000),
+      socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT_MS || 20000),
+      tls: {
+        minVersion: 'TLSv1.2'
+      }
     });
   }
   return smtpTransporter;
@@ -145,6 +151,31 @@ export const sendEmail = async (args) => {
   if (transport === 'smtp') {
     return await sendViaSmtp(args);
   }
+  return await sendViaApi(args);
+};
+
+const canFallbackToApi = (err) => {
+  const code = err?.code;
+  const transient = ['ETIMEDOUT', 'ECONNECTION', 'EAI_AGAIN', 'ENOTFOUND'];
+  return transient.includes(code || '') && !!process.env.BREVO_API_KEY;
+};
+
+// Wrap SMTP with automatic API fallback on transient network failures
+export const sendEmailWithFallback = async (args) => {
+  const transport = String(process.env.EMAIL_TRANSPORT || 'api').toLowerCase();
+
+  if (transport === 'smtp') {
+    try {
+      return await sendViaSmtp(args);
+    } catch (err) {
+      if (canFallbackToApi(err) && String(process.env.EMAIL_FALLBACK || 'true') !== 'false') {
+        console.warn('SMTP send failed, falling back to Brevo API:', err?.code || err?.message);
+        return await sendViaApi(args);
+      }
+      throw err;
+    }
+  }
+
   return await sendViaApi(args);
 };
 
