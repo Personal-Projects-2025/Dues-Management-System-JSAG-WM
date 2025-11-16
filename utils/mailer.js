@@ -92,17 +92,16 @@ const sendViaApi = async ({
   if (!senderEmail || !senderEmail.includes('@')) {
     throw new Error('EMAIL_FROM_ADDRESS is missing or invalid');
   }
-  let senderId = (process.env.BREVO_SENDER_ID || '').trim();
+  let senderId = (process.env.BREVO_SENDER_ID || '2').trim();
   if (!senderId && String(process.env.AUTO_RESOLVE_BREVO_SENDER || 'true') !== 'false') {
     senderId = String(await resolveBrevoSenderId(senderEmail) || '');
   }
   const recipients = Array.isArray(to) ? to : [to];
 
   const emailPayload = {
-    // Prefer senderId if provided (Brevo-verified sender)
-    ...(senderId
-      ? { senderId: Number(senderId) }
-      : { sender: { email: senderEmail, name: senderName } }),
+    // Always include sender; add senderId as well if available
+    sender: { email: senderEmail, name: senderName },
+    ...(senderId ? { senderId: Number(senderId) } : {}),
     to: recipients.map((recipient) => (typeof recipient === 'string' ? { email: recipient } : recipient)),
     subject,
     htmlContent,
