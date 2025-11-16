@@ -1,211 +1,177 @@
-import SibApiV3Sdk from 'sib-api-v3-sdk';
-import nodemailer from 'nodemailer';
+// mail.js
+import SibApiV3Sdk from "sib-api-v3-sdk";
+import nodemailer from "nodemailer";
 
-const client = SibApiV3Sdk.ApiClient.instance;
-const apiKeyAuth = client.authentications['api-key'];
-
-const getTransactionalApi = () => {
-  if (!process.env.BREVO_API_KEY) {
-    throw new Error('BREVO_API_KEY is not configured');
-  }
-
-  if (!apiKeyAuth.apiKey) {
-    apiKeyAuth.apiKey = process.env.BREVO_API_KEY;
-  }
-
-  return new SibApiV3Sdk.TransactionalEmailsApi();
+/* ------------------------------
+   ENV HELPERS - ALWAYS CLEAN
+---------------------------------*/
+const cleanEnv = (value) => {
+  if (!value) return "";
+  return value.trim().replace(/^['"]|['"]$/g, "");
 };
 
-let cachedSenderId = null;
-const resolveBrevoSenderId = async (senderEmail) => {
-  if (cachedSenderId) {
-    return cachedSenderId;
-  }
-  try {
-    const accountApi = new SibApiV3Sdk.SendersApi();
-    const list = await accountApi.getSenders();
-    const found = list?.senders?.find((s) => String(s.email).toLowerCase() === String(senderEmail).toLowerCase());
-    if (found?.id) {
-      cachedSenderId = Number(found.id);
-      return cachedSenderId;
-    }
-  } catch (e) {
-    // swallow; we'll fall back to explicit sender object
-  }
-  return null;
+const EMAIL_FROM = cleanEnv(process.env.EMAIL_FROM_ADDRESS);
+const EMAIL_NAME = cleanEnv(process.env.EMAIL_FROM_NAME || "Group Dues");
+const BREVO_KEY = cleanEnv(process.env.BREVO_API_KEY);
+const BREVO_SENDER_ID = cleanEnv(process.env.BREVO_SENDER_ID || "");
+const EMAIL_TRANSPORT = cleanEnv(process.env.EMAIL_TRANSPORT || "api").toLowerCase();
+const EMAIL_ENABLED = cleanEnv(process.env.EMAIL_ENABLED || "true") === "true";
+
+/* ------------------------------
+   VALIDATION
+---------------------------------*/
+if (!EMAIL_FROM || !EMAIL_FROM.includes("@")) {
+  throw new Error("EMAIL_FROM_ADDRESS is missing or invalid");
+}
+
+if (!BREVO_KEY) {
+  console.warn("⚠ BREVO_API_KEY missing — API emails will fail");
+}
+
+/* ------------------------------
+   BREVO API SETUP
+---------------------------------*/
+const brevoClient = SibApiV3Sdk.ApiClient.instance;
+brevoClient.authentications["api-key"].apiKey = BREVO_KEY;
+
+const brevoApi = new SibApiV3Sdk.TransactionalEmailsApi();
+
+/* ------------------------------
+   BREVO API SENDER BUILDER
+---------------------------------*/
+const buildBrevoSender = () => {
+  return {
+    sender: {
+      email: EMAIL_FROM,
+      name: EMAIL_NAME,
+    },
+    ...(BREVO_SENDER_ID ? { senderId: Number(BREVO_SENDER_ID) } : {}),
+  };
 };
 
-let smtpTransporter = null;
-const getSmtpTransporter = () => {
-  if (!smtpTransporter) {
-    const host = process.env.SMTP_HOST;
-    const port = Number(process.env.SMTP_PORT || 587);
-    const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASSWORD || process.env.SMTP_PASS;
-    const secure = String(process.env.SMTP_SECURE || '').toLowerCase() === 'true' || port === 465;
-
-    if (!host || !user || !pass) {
-      throw new Error('SMTP is not configured. Missing SMTP_HOST, SMTP_USER or SMTP_PASSWORD');
-    }
-
-    smtpTransporter = nodemailer.createTransport({
-      host,
-      port,
-      secure,
-      auth: { user, pass },
-      connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS || 15000),
-      greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS || 10000),
-      socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT_MS || 20000),
-      tls: {
-        minVersion: 'TLSv1.2'
-      }
-    });
-  }
-  return smtpTransporter;
-};
-
-const toBase64 = (data) => {
-  if (!data) {
-    return undefined;
-  }
-  if (Buffer.isBuffer(data)) {
-    return data.toString('base64');
-  }
-  if (typeof data === 'string') {
-    return Buffer.from(data).toString('base64');
-  }
-  throw new Error('Unsupported attachment content type');
-};
-
-const sendViaApi = async ({
+/* ------------------------------
+   SEND VIA BREVO API
+---------------------------------*/
+export const sendViaBrevoApi = async ({
   to,
   subject,
-  htmlContent,
-  textContent,
+  html,
+  text,
   attachments = [],
-  replyTo
+  replyTo,
 }) => {
-  // Strip accidental wrapping quotes from env values
-  const rawSenderEmail = (process.env.EMAIL_FROM_ADDRESS || '').trim();
-  const senderEmail = rawSenderEmail.replace(/^['"]|['"]$/g, '');
-  const senderName = (process.env.EMAIL_FROM_NAME || 'Group Dues').trim();
-  if (!senderEmail || !senderEmail.includes('@')) {
-    throw new Error('EMAIL_FROM_ADDRESS is missing or invalid');
-  }
-  const recipients = Array.isArray(to) ? to : [to];
+  const recipients = Array.isArray(to)
+    ? to.map((e) => ({ email: e }))
+    : [{ email: to }];
 
-  const emailPayload = {
-    // Always include sender (required by Brevo Transactional API)
-    sender: { email: senderEmail, name: senderName },
-    to: recipients.map((recipient) => (typeof recipient === 'string' ? { email: recipient } : recipient)),
+  const payload = {
+    ...buildBrevoSender(),
+    to: recipients,
     subject,
-    htmlContent,
-    textContent,
-    replyTo: replyTo ? (typeof replyTo === 'string' ? { email: replyTo } : replyTo) : undefined,
-    attachment: attachments.length > 0
-      ? attachments.map(({ name, content }) => ({ name, content: toBase64(content) }))
-      : undefined
+    htmlContent: html,
+    textContent: text,
+    replyTo: replyTo ? { email: replyTo } : undefined,
+    attachment:
+      attachments.length > 0
+        ? attachments.map(({ name, content }) => ({
+            name,
+            content: Buffer.from(content).toString("base64"),
+          }))
+        : undefined,
   };
 
-  const email = new SibApiV3Sdk.SendSmtpEmail(emailPayload);
-
-  const apiInstance = getTransactionalApi();
   try {
-    const response = await apiInstance.sendTransacEmail(email);
-    return response;
-  } catch (error) {
-    const details = error?.response?.body || error;
-    console.error('Brevo email send failed', {
-      code: details?.code || error?.code,
-      message: details?.message || error?.message,
-      // Safe diagnostics for sender (no secrets)
-      senderDiag: {
-        usingSenderId: false,
-        senderId: null,
-        senderEmail: senderEmail || null
-      }
-    });
+    const result = await brevoApi.sendTransacEmail(payload);
+    return { ok: true, brevo: true, result };
+  } catch (err) {
+    console.error("🔥 Brevo API send failed:", err?.response?.body || err);
     throw new Error(
-      details?.message ||
-        details?.errors?.map((e) => e.message).join(', ') ||
-        'Failed to send email via Brevo. Check API key, sender, and recipient details.'
+      err?.response?.body?.message || err.message || "Failed to send email"
     );
   }
 };
 
-const sendViaSmtp = async ({
-  to,
-  subject,
-  htmlContent,
-  textContent,
-  attachments = [],
-  replyTo
-}) => {
-  const rawSenderEmail = (process.env.EMAIL_FROM_ADDRESS || '').trim();
-  const senderEmail = rawSenderEmail.replace(/^['"]|['"]$/g, '');
-  const senderName = (process.env.EMAIL_FROM_NAME || 'Group Dues').trim();
-  if (!senderEmail || !senderEmail.includes('@')) {
-    throw new Error('EMAIL_FROM_ADDRESS is missing or invalid');
+/* ------------------------------
+   SMTP (Optional Fallback)
+---------------------------------*/
+let smtpTransporter;
+
+const getSmtpTransporter = () => {
+  if (smtpTransporter) return smtpTransporter;
+
+  const host = cleanEnv(process.env.SMTP_HOST);
+  const user = cleanEnv(process.env.SMTP_USER);
+  const pass = cleanEnv(process.env.SMTP_PASS || process.env.SMTP_PASSWORD);
+  const port = Number(cleanEnv(process.env.SMTP_PORT) || 587);
+
+  if (!host || !user || !pass) {
+    throw new Error("SMTP is not properly configured.");
   }
-  const recipients = Array.isArray(to) ? to : [to];
 
-  const transporter = getSmtpTransporter();
-
-  const formattedAttachments =
-    attachments.length > 0
-      ? attachments.map(({ name, content }) => {
-          if (Buffer.isBuffer(content)) {
-            return { filename: name, content };
-          }
-          if (typeof content === 'string') {
-            return { filename: name, content };
-          }
-          return { filename: name, content: Buffer.from(String(content)) };
-        })
-      : undefined;
-
-  const info = await transporter.sendMail({
-    from: senderName ? `"${senderName}" <${senderEmail}>` : senderEmail,
-    to: recipients.join(','),
-    subject,
-    html: htmlContent,
-    text: textContent,
-    replyTo,
-    attachments: formattedAttachments
+  smtpTransporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+    tls: { minVersion: "TLSv1.2" },
   });
 
-  return { messageId: info.messageId, accepted: info.accepted, rejected: info.rejected };
+  return smtpTransporter;
 };
 
-export const sendEmail = async (args) => {
-  if (process.env.EMAIL_ENABLED === 'false') {
-    return { skipped: true };
+/* ------------------------------
+   SEND VIA SMTP (Fallback)
+---------------------------------*/
+export const sendViaSmtp = async ({
+  to,
+  subject,
+  html,
+  text,
+  attachments = [],
+  replyTo,
+}) => {
+  const transporter = getSmtpTransporter();
+
+  const info = await transporter.sendMail({
+    from: `"${EMAIL_NAME}" <${EMAIL_FROM}>`,
+    to: Array.isArray(to) ? to.join(",") : to,
+    subject,
+    html,
+    text,
+    replyTo,
+    attachments,
+  });
+
+  return { ok: true, smtp: true, info };
+};
+
+/* ------------------------------
+   MASTER EXPORT
+---------------------------------*/
+export const sendEmail = async (options) => {
+  if (!EMAIL_ENABLED) {
+    return { ok: true, skipped: true };
   }
 
-  const senderEmail = process.env.EMAIL_FROM_ADDRESS;
-  if (!senderEmail) {
-    throw new Error('EMAIL_FROM_ADDRESS is not configured');
-  }
-
-  const transport = String(process.env.EMAIL_TRANSPORT || 'api').toLowerCase();
-  if (transport === 'smtp') {
+  // Primary: Brevo API
+  if (EMAIL_TRANSPORT === "api") {
     try {
-      return await sendViaSmtp(args);
-    } catch (err) {
-      if (canFallbackToApi(err) && String(process.env.EMAIL_FALLBACK || 'true') !== 'false') {
-        console.warn('SMTP send failed, falling back to Brevo API:', err?.code || err?.message);
-        return await sendViaApi(args);
-      }
-      throw err;
+      return await sendViaBrevoApi(options);
+    } catch (error) {
+      console.warn("⚠ API failed; trying SMTP fallback...");
+      return await sendViaSmtp(options);
     }
   }
-  return await sendViaApi(args);
+
+  // Primary: SMTP
+  if (EMAIL_TRANSPORT === "smtp") {
+    try {
+      return await sendViaSmtp(options);
+    } catch (error) {
+      console.warn("⚠ SMTP failed; trying Brevo API fallback...");
+      return await sendViaBrevoApi(options);
+    }
+  }
+
+  throw new Error("Invalid EMAIL_TRANSPORT value.");
 };
-
-const canFallbackToApi = (err) => {
-  const code = err?.code;
-  const transient = ['ETIMEDOUT', 'ECONNECTION', 'EAI_AGAIN', 'ENOTFOUND'];
-  return transient.includes(code || '') && !!process.env.BREVO_API_KEY;
-};
-
-
