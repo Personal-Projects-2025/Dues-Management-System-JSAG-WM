@@ -132,6 +132,13 @@ export const sendViaSmtp = async ({
 }) => {
   const transporter = getSmtpTransporter();
 
+  const nmAttachments =
+    attachments.length > 0
+      ? attachments.map((a) => (a && typeof a === "object"
+          ? { filename: a.name || a.filename, content: a.content }
+          : a))
+      : undefined;
+
   const info = await transporter.sendMail({
     from: `"${EMAIL_NAME}" <${EMAIL_FROM}>`,
     to: Array.isArray(to) ? to.join(",") : to,
@@ -139,7 +146,7 @@ export const sendViaSmtp = async ({
     html,
     text,
     replyTo,
-    attachments,
+    attachments: nmAttachments,
   });
 
   return { ok: true, smtp: true, info };
@@ -153,23 +160,39 @@ export const sendEmail = async (options) => {
     return { ok: true, skipped: true };
   }
 
+  // Normalize option keys from existing callers:
+  const normalized = {
+    to: options.to,
+    subject: options.subject,
+    html: options.html ?? options.htmlContent ?? undefined,
+    text: options.text ?? options.textContent ?? undefined,
+    // Normalize attachments to Nodemailer/Brevo shapes later per transport
+    attachments: Array.isArray(options.attachments) ? options.attachments : [],
+    replyTo: options.replyTo,
+  };
+
+  // Ensure at least one content field is present for Brevo
+  if (!normalized.html && !normalized.text) {
+    normalized.text = `Message from ${EMAIL_NAME}`;
+  }
+
   // Primary: Brevo API
   if (EMAIL_TRANSPORT === "api") {
     try {
-      return await sendViaBrevoApi(options);
+      return await sendViaBrevoApi(normalized);
     } catch (error) {
       console.warn("⚠ API failed; trying SMTP fallback...");
-      return await sendViaSmtp(options);
+      return await sendViaSmtp(normalized);
     }
   }
 
   // Primary: SMTP
   if (EMAIL_TRANSPORT === "smtp") {
     try {
-      return await sendViaSmtp(options);
+      return await sendViaSmtp(normalized);
     } catch (error) {
       console.warn("⚠ SMTP failed; trying Brevo API fallback...");
-      return await sendViaBrevoApi(options);
+      return await sendViaBrevoApi(normalized);
     }
   }
 
