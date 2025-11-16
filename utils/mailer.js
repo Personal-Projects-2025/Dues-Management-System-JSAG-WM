@@ -16,6 +16,25 @@ const getTransactionalApi = () => {
   return new SibApiV3Sdk.TransactionalEmailsApi();
 };
 
+let cachedSenderId = null;
+const resolveBrevoSenderId = async (senderEmail) => {
+  if (cachedSenderId) {
+    return cachedSenderId;
+  }
+  try {
+    const accountApi = new SibApiV3Sdk.SendersApi();
+    const list = await accountApi.getSenders();
+    const found = list?.senders?.find((s) => String(s.email).toLowerCase() === String(senderEmail).toLowerCase());
+    if (found?.id) {
+      cachedSenderId = Number(found.id);
+      return cachedSenderId;
+    }
+  } catch (e) {
+    // swallow; we'll fall back to explicit sender object
+  }
+  return null;
+};
+
 let smtpTransporter = null;
 const getSmtpTransporter = () => {
   if (!smtpTransporter) {
@@ -73,7 +92,10 @@ const sendViaApi = async ({
   if (!senderEmail || !senderEmail.includes('@')) {
     throw new Error('EMAIL_FROM_ADDRESS is missing or invalid');
   }
-  const senderId = (process.env.BREVO_SENDER_ID || '').trim();
+  let senderId = (process.env.BREVO_SENDER_ID || '').trim();
+  if (!senderId && String(process.env.AUTO_RESOLVE_BREVO_SENDER || 'true') !== 'false') {
+    senderId = String(await resolveBrevoSenderId(senderEmail) || '');
+  }
   const recipients = Array.isArray(to) ? to : [to];
 
   const emailPayload = {
