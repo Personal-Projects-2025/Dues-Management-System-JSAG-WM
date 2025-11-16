@@ -66,12 +66,21 @@ const sendViaApi = async ({
   attachments = [],
   replyTo
 }) => {
-  const senderEmail = process.env.EMAIL_FROM_ADDRESS;
-  const senderName = process.env.EMAIL_FROM_NAME || 'Group Dues';
+  // Strip accidental wrapping quotes from env values
+  const rawSenderEmail = (process.env.EMAIL_FROM_ADDRESS || '').trim();
+  const senderEmail = rawSenderEmail.replace(/^['"]|['"]$/g, '');
+  const senderName = (process.env.EMAIL_FROM_NAME || 'Group Dues').trim();
+  if (!senderEmail || !senderEmail.includes('@')) {
+    throw new Error('EMAIL_FROM_ADDRESS is missing or invalid');
+  }
+  const senderId = (process.env.BREVO_SENDER_ID || '').trim();
   const recipients = Array.isArray(to) ? to : [to];
 
-  const email = new SibApiV3Sdk.SendSmtpEmail({
-    sender: { email: senderEmail, name: senderName },
+  const emailPayload = {
+    // Prefer senderId if provided (Brevo-verified sender)
+    ...(senderId
+      ? { senderId: Number(senderId) }
+      : { sender: { email: senderEmail, name: senderName } }),
     to: recipients.map((recipient) => (typeof recipient === 'string' ? { email: recipient } : recipient)),
     subject,
     htmlContent,
@@ -80,7 +89,9 @@ const sendViaApi = async ({
     attachment: attachments.length > 0
       ? attachments.map(({ name, content }) => ({ name, content: toBase64(content) }))
       : undefined
-  });
+  };
+
+  const email = new SibApiV3Sdk.SendSmtpEmail(emailPayload);
 
   const apiInstance = getTransactionalApi();
   try {
@@ -88,7 +99,16 @@ const sendViaApi = async ({
     return response;
   } catch (error) {
     const details = error?.response?.body || error;
-    console.error('Brevo email send failed', details);
+    console.error('Brevo email send failed', {
+      code: details?.code || error?.code,
+      message: details?.message || error?.message,
+      // Safe diagnostics for sender (no secrets)
+      senderDiag: {
+        usingSenderId: Boolean(senderId),
+        senderId: senderId || null,
+        senderEmail: senderId ? null : senderEmail || null
+      }
+    });
     throw new Error(
       details?.message ||
         details?.errors?.map((e) => e.message).join(', ') ||
@@ -105,8 +125,12 @@ const sendViaSmtp = async ({
   attachments = [],
   replyTo
 }) => {
-  const senderEmail = process.env.EMAIL_FROM_ADDRESS;
-  const senderName = process.env.EMAIL_FROM_NAME || 'Group Dues';
+  const rawSenderEmail = (process.env.EMAIL_FROM_ADDRESS || '').trim();
+  const senderEmail = rawSenderEmail.replace(/^['"]|['"]$/g, '');
+  const senderName = (process.env.EMAIL_FROM_NAME || 'Group Dues').trim();
+  if (!senderEmail || !senderEmail.includes('@')) {
+    throw new Error('EMAIL_FROM_ADDRESS is missing or invalid');
+  }
   const recipients = Array.isArray(to) ? to : [to];
 
   const transporter = getSmtpTransporter();
