@@ -92,16 +92,11 @@ const sendViaApi = async ({
   if (!senderEmail || !senderEmail.includes('@')) {
     throw new Error('EMAIL_FROM_ADDRESS is missing or invalid');
   }
-  let senderId = (process.env.BREVO_SENDER_ID || '2').trim();
-  if (!senderId && String(process.env.AUTO_RESOLVE_BREVO_SENDER || 'true') !== 'false') {
-    senderId = String(await resolveBrevoSenderId(senderEmail) || '');
-  }
   const recipients = Array.isArray(to) ? to : [to];
 
   const emailPayload = {
-    // Always include sender; add senderId as well if available
+    // Always include sender (required by Brevo Transactional API)
     sender: { email: senderEmail, name: senderName },
-    ...(senderId ? { senderId: Number(senderId) } : {}),
     to: recipients.map((recipient) => (typeof recipient === 'string' ? { email: recipient } : recipient)),
     subject,
     htmlContent,
@@ -125,9 +120,9 @@ const sendViaApi = async ({
       message: details?.message || error?.message,
       // Safe diagnostics for sender (no secrets)
       senderDiag: {
-        usingSenderId: Boolean(senderId),
-        senderId: senderId || null,
-        senderEmail: senderId ? null : senderEmail || null
+        usingSenderId: false,
+        senderId: null,
+        senderEmail: senderEmail || null
       }
     });
     throw new Error(
