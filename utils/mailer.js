@@ -11,7 +11,7 @@ const cleanEnv = (value) => {
 };
 
 const EMAIL_FROM = cleanEnv(process.env.EMAIL_FROM_ADDRESS);
-const EMAIL_NAME = cleanEnv(process.env.EMAIL_FROM_NAME || "Group Dues");
+const EMAIL_NAME = cleanEnv(process.env.EMAIL_FROM_NAME || "Dues Accountant");
 const BREVO_KEY = cleanEnv(process.env.BREVO_API_KEY);
 const BREVO_SENDER_ID = cleanEnv(process.env.BREVO_SENDER_ID || "");
 const EMAIL_TRANSPORT = cleanEnv(process.env.EMAIL_TRANSPORT || "api").toLowerCase();
@@ -39,11 +39,11 @@ const brevoApi = new SibApiV3Sdk.TransactionalEmailsApi();
 /* ------------------------------
    BREVO API SENDER BUILDER
 ---------------------------------*/
-const buildBrevoSender = () => {
+const buildBrevoSender = (senderName = null) => {
   return {
     sender: {
       email: EMAIL_FROM,
-      name: EMAIL_NAME,
+      name: senderName || EMAIL_NAME,
     },
     ...(BREVO_SENDER_ID ? { senderId: Number(BREVO_SENDER_ID) } : {}),
   };
@@ -59,13 +59,14 @@ export const sendViaBrevoApi = async ({
   text,
   attachments = [],
   replyTo,
+  senderName = null,
 }) => {
   const recipients = Array.isArray(to)
     ? to.map((e) => ({ email: e }))
     : [{ email: to }];
 
   const payload = {
-    ...buildBrevoSender(),
+    ...buildBrevoSender(senderName),
     to: recipients,
     subject,
     htmlContent: html,
@@ -129,6 +130,7 @@ export const sendViaSmtp = async ({
   text,
   attachments = [],
   replyTo,
+  senderName = null,
 }) => {
   const transporter = getSmtpTransporter();
 
@@ -139,8 +141,10 @@ export const sendViaSmtp = async ({
           : a))
       : undefined;
 
+  const finalSenderName = senderName || EMAIL_NAME;
+
   const info = await transporter.sendMail({
-    from: `"${EMAIL_NAME}" <${EMAIL_FROM}>`,
+    from: `"${finalSenderName}" <${EMAIL_FROM}>`,
     to: Array.isArray(to) ? to.join(",") : to,
     subject,
     html,
@@ -169,6 +173,7 @@ export const sendEmail = async (options) => {
     // Normalize attachments to Nodemailer/Brevo shapes later per transport
     attachments: Array.isArray(options.attachments) ? options.attachments : [],
     replyTo: options.replyTo,
+    senderName: options.senderName || null, // Dynamic sender name support
   };
 
   // Ensure at least one content field is present for Brevo

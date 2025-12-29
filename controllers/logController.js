@@ -1,8 +1,9 @@
-import ActivityLog from '../models/ActivityLog.js';
+import { getTenantModels } from '../utils/tenantModels.js';
 import { exportLogsToExcel } from '../utils/excelExporter.js';
 
 export const getActivityLogs = async (req, res) => {
   try {
+    const { ActivityLog } = getTenantModels(req);
     const { actor, startDate, endDate, action } = req.query;
     const userRole = req.user.role;
     const username = req.user.username;
@@ -38,6 +39,7 @@ export const getActivityLogs = async (req, res) => {
 
 export const exportActivityLogs = async (req, res) => {
   try {
+    const { ActivityLog } = getTenantModels(req);
     const { actor, startDate, endDate, action } = req.query;
     const userRole = req.user.role;
     const username = req.user.username;
@@ -80,6 +82,7 @@ export const deleteActivityLog = async (req, res) => {
       return res.status(403).json({ error: 'Only super users can delete logs' });
     }
 
+    const { ActivityLog } = getTenantModels(req);
     const log = await ActivityLog.findByIdAndDelete(req.params.id);
     if (!log) {
       return res.status(404).json({ error: 'Log not found' });

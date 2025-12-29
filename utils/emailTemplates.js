@@ -2,14 +2,14 @@ const formatCurrency = (value) => {
   if (typeof value !== 'number') {
     return value;
   }
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('en-GH', {
     style: 'currency',
-    currency: process.env.CURRENCY_CODE || 'USD'
+    currency: process.env.CURRENCY_CODE || 'GHS'
   }).format(value);
 };
 
 export const renderPaymentReceiptEmail = ({ member, receipt }) => {
-  const groupName = process.env.GROUP_NAME || 'Group Dues';
+  const groupName = process.env.GROUP_NAME || 'Dues Accountant';
   return `
     <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
       <h2 style="color: #2563eb;">${groupName} &mdash; Payment Receipt</h2>
@@ -25,7 +25,7 @@ export const renderPaymentReceiptEmail = ({ member, receipt }) => {
 };
 
 export const renderPaymentReceiptText = ({ member, receipt }) => {
-  const groupName = process.env.GROUP_NAME || 'Group Dues';
+  const groupName = process.env.GROUP_NAME || 'Dues Accountant';
   return `Hello ${member.name},
 
 Thank you for your payment of ${formatCurrency(receipt.amount)} covering ${receipt.monthsCovered} month(s) of dues.
@@ -66,7 +66,7 @@ const scriptureVerses = [
 export const pickScriptureVerse = (index = 0) => scriptureVerses[index % scriptureVerses.length];
 
 export const renderReminderEmail = ({ member, amountOwed, monthsInArrears, verse }) => {
-  const groupName = process.env.GROUP_NAME || 'Group Dues';
+  const groupName = process.env.GROUP_NAME || 'Dues Accountant';
   return `
     <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
       <h2 style="color: #2563eb;">${groupName} &mdash; Monthly Dues Reminder</h2>
@@ -83,7 +83,7 @@ export const renderReminderEmail = ({ member, amountOwed, monthsInArrears, verse
 };
 
 export const renderReminderText = ({ member, amountOwed, monthsInArrears, verse }) => {
-  const groupName = process.env.GROUP_NAME || 'Group Dues';
+  const groupName = process.env.GROUP_NAME || 'Dues Accountant';
   return `Hello ${member.name},
 
 As of today, your outstanding dues amount to ${formatCurrency(amountOwed)}, covering ${monthsInArrears} month(s).

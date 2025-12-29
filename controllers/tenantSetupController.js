@@ -1,0 +1,242 @@
+import bcrypt from 'bcrypt';
+import { getTenantModel } from '../models/Tenant.js';
+import { getUserModel } from '../models/User.js';
+import { getTenantConnection } from '../utils/connectionManager.js';
+import { initializeTenantSchema } from '../scripts/initializeTenantSchema.js';
+
+/**
+ * Register a new tenant (self-service or super admin)
+ */
+export const registerTenant = async (req, res) => {
+  try {
+    const {
+      name,
+      slug,
+      databaseName,
+      adminUsername,
+      adminPassword,
+      adminEmail,
+      contactEmail,
+      contactPhone,
+      branding
+    } = req.body;
+
+    // Validation
+    if (!name || !slug || !databaseName || !adminUsername || !adminPassword) {
+      return res.status(400).json({
+        error: 'Name, slug, database name, admin username, and password are required'
+      });
+    }
+
+    // Validate database name format
+    if (!/^[a-z0-9_-]+$/.test(databaseName)) {
+      return res.status(400).json({
+        error: 'Database name can only contain lowercase letters, numbers, underscores, and hyphens'
+      });
+    }
+
+    // Validate slug format
+    if (!/^[a-z0-9-]+$/.test(slug)) {
+      return res.status(400).json({
+        error: 'Slug can only contain lowercase letters, numbers, and hyphens'
+      });
+    }
+
+    const Tenant = await getTenantModel();
+
+    // Check if slug or database name already exists
+    const existingTenant = await Tenant.findOne({
+      $or: [
+        { slug },
+        { databaseName }
+      ],
+      deletedAt: null
+    });
+
+    if (existingTenant) {
+      return res.status(400).json({
+        error: 'A tenant with this slug or database name already exists'
+      });
+    }
+
+    // Check if database already exists by trying to connect
+    try {
+      const testConn = await getTenantConnection(databaseName);
+      // If connection succeeds, database might exist
+      const collections = await testConn.db.listCollections().toArray();
+      if (collections.length > 0) {
+        return res.status(400).json({
+          error: 'Database name already exists and contains data'
+        });
+      }
+    } catch (error) {
+      // Database doesn't exist, which is good
+    }
+
+    // Create tenant record
+    const tenant = new Tenant({
+      name,
+      slug,
+      databaseName,
+      status: 'active',
+      config: {
+        branding: {
+          name: branding?.name || name,
+          logo: branding?.logo || '',
+          primaryColor: branding?.primaryColor || '#3B82F6',
+          secondaryColor: branding?.secondaryColor || '#1E40AF'
+        },
+        settings: {
+          emailNotifications: true,
+          autoReceipts: true,
+          reminderEnabled: true
+        },
+        features: {
+          subgroups: true,
+          expenditure: true,
+          reports: true
+        }
+      },
+      contact: {
+        email: contactEmail || '',
+        phone: contactPhone || '',
+        address: ''
+      },
+      createdBy: req.user?.userId || null
+    });
+
+    await tenant.save();
+
+    // Initialize tenant database schema
+    try {
+      await initializeTenantSchema(databaseName);
+    } catch (error) {
+      // If schema initialization fails, delete tenant record
+      await Tenant.findByIdAndDelete(tenant._id);
+      return res.status(500).json({
+        error: 'Failed to initialize tenant database',
+        details: error.message
+      });
+    }
+
+    // Create admin user in master database
+    const User = await getUserModel();
+    const passwordHash = await bcrypt.hash(adminPassword, 10);
+    
+    // Generate password reset token for admin user
+    const { randomBytes } = await import('crypto');
+    const resetToken = randomBytes(32).toString('hex');
+    const resetTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    
+    const adminUser = new User({
+      username: adminUsername,
+      email: adminEmail ? adminEmail.toLowerCase() : null,
+      passwordHash,
+      role: 'admin',
+      tenantId: tenant._id,
+      passwordResetToken: resetToken,
+      passwordResetExpires: resetTokenExpires
+    });
+
+    await adminUser.save();
+
+    // Send tenant creation email notification
+    try {
+      const { sendEmail } = await import('../utils/mailer.js');
+      const { renderTenantCreationEmail, renderTenantCreationText } = await import('../utils/tenantCreationEmail.js');
+      
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const loginUrl = `${frontendUrl}/login`;
+      
+      // Send to adminEmail if provided, otherwise contactEmail
+      const recipientEmail = adminEmail || contactEmail;
+      
+      if (recipientEmail) {
+        await sendEmail({
+          to: recipientEmail,
+          subject: `Welcome to Dues Accountant - ${tenant.name} Registration Complete`,
+          html: renderTenantCreationEmail({
+            tenantName: tenant.name,
+            tenantSlug: tenant.slug,
+            adminUsername: adminUsername,
+            adminPassword: adminPassword,
+            adminEmail: adminEmail,
+            loginUrl: loginUrl
+          }),
+          text: renderTenantCreationText({
+            tenantName: tenant.name,
+            tenantSlug: tenant.slug,
+            adminUsername: adminUsername,
+            adminPassword: adminPassword,
+            adminEmail: adminEmail,
+            loginUrl: loginUrl
+          }),
+          senderName: tenant.name // Use tenant name as sender
+        });
+      }
+    } catch (emailError) {
+      console.error('Failed to send tenant creation email:', emailError);
+      // Don't fail tenant creation if email fails
+    }
+
+    res.status(201).json({
+      message: 'Tenant registered successfully',
+      tenant: {
+        id: tenant._id,
+        name: tenant.name,
+        slug: tenant.slug,
+        databaseName: tenant.databaseName
+      },
+      adminUser: {
+        id: adminUser._id,
+        username: adminUser.username
+      }
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ error: 'Tenant slug or database name already exists' });
+    }
+    res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * Get tenant setup status
+ */
+export const getSetupStatus = async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const Tenant = await getTenantModel();
+    const tenant = await Tenant.findOne({ slug, deletedAt: null });
+
+    if (!tenant) {
+      return res.status(404).json({ error: 'Tenant not found' });
+    }
+
+    // Check if database is initialized
+    let dbInitialized = false;
+    try {
+      const conn = await getTenantConnection(tenant.databaseName);
+      const collections = await conn.db.listCollections().toArray();
+      dbInitialized = collections.length > 0;
+    } catch (error) {
+      dbInitialized = false;
+    }
+
+    res.json({
+      tenant: {
+        id: tenant._id,
+        name: tenant.name,
+        slug: tenant.slug,
+        status: tenant.status
+      },
+      setup: {
+        databaseInitialized: dbInitialized,
+        completed: dbInitialized && tenant.status === 'active'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+

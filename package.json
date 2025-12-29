@@ -1,29 +1,31 @@
 {
   "name": "group-dues-backend",
   "version": "1.0.0",
-  "description": "Backend API for Group Dues Account Management System",
+  "description": "Backend API for Dues Accountant",
   "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "create-super": "node scripts/createSuperUser.js"
+    "create-super": "node scripts/createSuperUser.js",
+    "create-system": "node scripts/createSystemUser.js",
+    "assign-demo-tenant": "node scripts/assignUsersToDemoTenant.js",
+    "migrate-demo": "node scripts/migrateToTenant.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.18.2",
-    "mongoose": "^8.0.3",
-    "dotenv": "^16.3.1",
-    "cors": "^2.8.5",
     "bcrypt": "^5.1.1",
-    "jsonwebtoken": "^9.0.2",
-    "pdfkit": "^0.14.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
     "exceljs": "^4.4.0",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.0.3",
     "node-cron": "^3.0.3",
-    "sib-api-v3-sdk": "^8.5.0",
-    "nodemailer": "^6.9.15"
+    "nodemailer": "^7.0.12",
+    "pdfkit": "^0.14.0",
+    "sib-api-v3-sdk": "^8.5.0"
   }
 }
-

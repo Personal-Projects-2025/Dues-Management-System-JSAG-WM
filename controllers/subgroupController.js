@@ -1,6 +1,5 @@
 import mongoose from 'mongoose';
-import Subgroup from '../models/Subgroup.js';
-import Member from '../models/Member.js';
+import { getTenantModels } from '../utils/tenantModels.js';
 
 const buildSubgroupStats = (subgroups, memberStatsMap) => {
   return subgroups.map((subgroup) => {
@@ -23,6 +22,7 @@ const buildSubgroupStats = (subgroups, memberStatsMap) => {
 
 export const createSubgroup = async (req, res) => {
   try {
+    const { Subgroup, Member } = getTenantModels(req);
     const { name, leaderId } = req.body;
 
     if (!name || !leaderId) {
@@ -54,6 +54,7 @@ export const createSubgroup = async (req, res) => {
 
 export const getSubgroups = async (req, res) => {
   try {
+    const { Subgroup, Member } = getTenantModels(req);
     const subgroups = await Subgroup.find()
       .populate('leaderId', 'name memberId role contact')
       .sort({ createdAt: -1 });
@@ -87,6 +88,7 @@ export const getSubgroups = async (req, res) => {
 
 export const getSubgroupById = async (req, res) => {
   try {
+    const { Subgroup, Member } = getTenantModels(req);
     const subgroup = await Subgroup.findById(req.params.id).populate('leaderId', 'name memberId role contact');
 
     if (!subgroup) {
@@ -117,6 +119,7 @@ export const getSubgroupById = async (req, res) => {
 
 export const updateSubgroup = async (req, res) => {
   try {
+    const { Subgroup, Member } = getTenantModels(req);
     const { name, leaderId } = req.body;
     const subgroup = await Subgroup.findById(req.params.id);
 
@@ -154,6 +157,7 @@ export const updateSubgroup = async (req, res) => {
 
 export const deleteSubgroup = async (req, res) => {
   try {
+    const { Subgroup, Member } = getTenantModels(req);
     const subgroup = await Subgroup.findById(req.params.id);
     if (!subgroup) {
       return res.status(404).json({ error: 'Subgroup not found' });
@@ -178,6 +182,7 @@ export const deleteSubgroup = async (req, res) => {
 
 export const getSubgroupLeaderboard = async (req, res) => {
   try {
+    const { Subgroup, Member } = getTenantModels(req);
     const subgroups = await Subgroup.find().populate('leaderId', 'name memberId role contact');
 
     const memberStats = await Member.aggregate([

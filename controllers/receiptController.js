@@ -1,5 +1,4 @@
-import Receipt from '../models/Receipt.js';
-import Member from '../models/Member.js';
+import { getTenantModels } from '../utils/tenantModels.js';
 import { generateReceiptPDFFromReceipt } from '../utils/pdfGenerator.js';
 import { sendEmail } from '../utils/mailer.js';
 import { renderPaymentReceiptEmail, renderPaymentReceiptText } from '../utils/emailTemplates.js';
@@ -15,6 +14,7 @@ const generateReceiptId = () => {
 // Create receipt for a payment
 export const createReceipt = async (req, res) => {
   try {
+    const { Receipt, Member } = getTenantModels(req);
     const { paymentId, memberId, amount, monthsCovered, duesPerMonth, paymentDate, remarks } = req.body;
 
     if (!paymentId || !memberId || !amount || !monthsCovered || !duesPerMonth || !paymentDate) {
@@ -62,6 +62,7 @@ export const createReceipt = async (req, res) => {
 // Get all receipts for a member
 export const getMemberReceipts = async (req, res) => {
   try {
+    const { Receipt } = getTenantModels(req);
     const { memberId } = req.params;
     const receipts = await Receipt.find({ memberId }).sort({ createdAt: -1 });
     res.json(receipts);
@@ -73,6 +74,7 @@ export const getMemberReceipts = async (req, res) => {
 // Get receipt PDF
 export const getReceiptPDF = async (req, res) => {
   try {
+    const { Receipt, Member } = getTenantModels(req);
     const { receiptId } = req.params;
     const receipt = await Receipt.findOne({ receiptId });
 
@@ -98,6 +100,7 @@ export const getReceiptPDF = async (req, res) => {
 // Get receipt by ID
 export const getReceiptById = async (req, res) => {
   try {
+    const { Receipt } = getTenantModels(req);
     const { receiptId } = req.params;
     const receipt = await Receipt.findOne({ receiptId });
 
@@ -114,6 +117,7 @@ export const getReceiptById = async (req, res) => {
 // Get all receipts
 export const getAllReceipts = async (req, res) => {
   try {
+    const { Receipt } = getTenantModels(req);
     const receipts = await Receipt.find().sort({ createdAt: -1 });
     res.json(receipts);
   } catch (error) {
@@ -123,6 +127,7 @@ export const getAllReceipts = async (req, res) => {
 
 export const resendReceiptEmail = async (req, res) => {
   try {
+    const { Receipt, Member } = getTenantModels(req);
     const { receiptId } = req.params;
     const receipt = await Receipt.findOne({ receiptId });
 
@@ -140,7 +145,7 @@ export const resendReceiptEmail = async (req, res) => {
     }
 
     const pdfBuffer = await generateReceiptPDFFromReceipt(receipt, member);
-    const groupName = process.env.GROUP_NAME || 'Group Dues';
+    const groupName = req.tenant?.config?.branding?.name || req.tenant?.name || process.env.GROUP_NAME || 'Dues Accountant';
 
     await sendEmail({
       to: [member.email],
@@ -152,7 +157,8 @@ export const resendReceiptEmail = async (req, res) => {
           name: `receipt-${receipt.receiptId}.pdf`,
           content: pdfBuffer
         }
-      ]
+      ],
+      senderName: groupName
     });
 
     res.json({ message: 'Receipt email sent successfully' });

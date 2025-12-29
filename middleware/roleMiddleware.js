@@ -1,6 +1,7 @@
 import { requireRole } from './authMiddleware.js';
 
-export const requireSuper = requireRole('super');
-export const requireAdmin = requireRole('admin', 'super');
-export const requireAnyAuth = requireRole('admin', 'super');
+export const requireSystem = requireRole('system');
+export const requireSuper = requireRole('super', 'system');
+export const requireAdmin = requireRole('admin', 'super', 'system');
+export const requireAnyAuth = requireRole('admin', 'super', 'system');
 

@@ -1,6 +1,5 @@
-import Reminder from '../models/Reminder.js';
-import Member from '../models/Member.js';
-import { sendReminders } from '../jobs/reminderScheduler.js';
+import { getTenantModels } from '../utils/tenantModels.js';
+import { sendRemindersForTenant } from '../jobs/reminderScheduler.js';
 
 const calculateNextReminderDate = () => {
   const now = new Date();
@@ -17,7 +16,7 @@ const calculateNextReminderDate = () => {
 
 export const triggerReminders = async (req, res) => {
   try {
-    const summary = await sendReminders('manual');
+    const summary = await sendRemindersForTenant(req.tenantConnection, 'manual', req.tenant);
     res.json({
       message: 'Reminder emails processed',
       summary
@@ -29,6 +28,7 @@ export const triggerReminders = async (req, res) => {
 
 export const getReminderLogs = async (req, res) => {
   try {
+    const { Reminder } = getTenantModels(req);
     const { limit = 50, status, memberId } = req.query;
     const query = {};
 
@@ -53,6 +53,7 @@ export const getReminderLogs = async (req, res) => {
 
 export const getReminderSummary = async (req, res) => {
   try {
+    const { Reminder, Member } = getTenantModels(req);
     const lastReminder = await Reminder.findOne().sort({ sentAt: -1 });
     let totalOutstandingMembers = 0;
     let totalOutstandingAmount = 0;

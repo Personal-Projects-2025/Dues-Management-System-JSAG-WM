@@ -1,9 +1,10 @@
-import Member from '../models/Member.js';
+import { getTenantModels } from '../utils/tenantModels.js';
 import { exportMembersToExcel, exportPaymentsToExcel } from '../utils/excelExporter.js';
 import { generateReportPDF } from '../utils/pdfGenerator.js';
 
 export const getDashboardStats = async (req, res) => {
   try {
+    const { Member, Expenditure, Subgroup } = getTenantModels(req);
     const members = await Member.find();
     const totalMembers = members.length;
     
@@ -18,18 +19,20 @@ export const getDashboardStats = async (req, res) => {
       }
     });
 
-    // Get total admins
-    const User = (await import('../models/User.js')).default;
-    const totalAdmins = await User.countDocuments({ role: { $in: ['admin', 'super'] } });
+    // Get total admins (from master DB - users are stored there)
+    const { getUserModel } = await import('../models/User.js');
+    const User = await getUserModel();
+    const totalAdmins = await User.countDocuments({ 
+      role: { $in: ['admin', 'super'] },
+      tenantId: req.tenantId 
+    });
 
     // Get total expenditures
-    const Expenditure = (await import('../models/Expenditure.js')).default;
     const expenditures = await Expenditure.find();
     const totalSpent = expenditures.reduce((sum, exp) => sum + exp.amount, 0);
     const balanceRemaining = totalCollected - totalSpent;
 
     // Subgroup performance
-    const Subgroup = (await import('../models/Subgroup.js')).default;
     const subgroups = await Subgroup.find().lean();
     const subgroupTotals = new Map();
 
@@ -128,6 +131,7 @@ export const getDashboardStats = async (req, res) => {
 
 export const exportMembersReport = async (req, res) => {
   try {
+    const { Member } = getTenantModels(req);
     const { format } = req.query;
     const members = await Member.find().sort({ name: 1 });
 
@@ -151,6 +155,7 @@ export const exportMembersReport = async (req, res) => {
 
 export const exportPaymentsReport = async (req, res) => {
   try {
+    const { Member } = getTenantModels(req);
     const { format, startDate, endDate, memberId, recordedBy } = req.query;
 
     let query = {};

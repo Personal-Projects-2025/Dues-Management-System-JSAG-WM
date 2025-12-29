@@ -1,18 +1,20 @@
 import bcrypt from 'bcrypt';
-import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import User from '../models/User.js';
+import { connectMasterDB } from '../config/db.js';
+import { getUserModel } from '../models/User.js';
 
 dotenv.config();
 
 const createSuperUser = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('Connected to MongoDB');
+    await connectMasterDB();
+    console.log('Connected to master database');
 
     const username = process.argv[2] || 'admin';
     const password = process.argv[3] || 'admin123';
     const role = 'super';
+
+    const User = await getUserModel();
 
     // Check if user already exists
     const existingUser = await User.findOne({ username });
@@ -24,11 +26,12 @@ const createSuperUser = async () => {
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Create user
+    // Create user (super users need tenantId - will be assigned to demo tenant)
     const user = new User({
       username,
       passwordHash,
-      role
+      role,
+      tenantId: null // Will be assigned to demo tenant by middleware
     });
 
     await user.save();
@@ -36,6 +39,7 @@ const createSuperUser = async () => {
     console.log(`Username: ${username}`);
     console.log(`Password: ${password}`);
     console.log(`Role: ${role}`);
+    console.log(`\nNote: This user will be assigned to Demo Tenant on first login.`);
 
     process.exit(0);
   } catch (error) {

@@ -9,16 +9,21 @@ import {
 } from '../controllers/receiptController.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { requireAdmin } from '../middleware/roleMiddleware.js';
+import { setTenantContext, requireTenant } from '../middleware/tenantMiddleware.js';
 
 const router = express.Router();
 
-// All routes require authentication and admin role
-router.post('/generate', authenticateToken, requireAdmin, createReceipt);
-router.get('/', authenticateToken, requireAdmin, getAllReceipts);
-router.get('/member/:memberId', authenticateToken, requireAdmin, getMemberReceipts);
-router.get('/pdf/:receiptId', authenticateToken, requireAdmin, getReceiptPDF);
-router.post('/:receiptId/resend', authenticateToken, requireAdmin, resendReceiptEmail);
-router.get('/:receiptId', authenticateToken, requireAdmin, getReceiptById);
+router.use(authenticateToken);
+router.use(setTenantContext);
+router.use(requireTenant);
+router.use(requireAdmin);
+
+router.post('/generate', createReceipt);
+router.get('/', getAllReceipts);
+router.get('/member/:memberId', getMemberReceipts);
+router.get('/pdf/:receiptId', getReceiptPDF);
+router.post('/:receiptId/resend', resendReceiptEmail);
+router.get('/:receiptId', getReceiptById);
 
 export default router;
 

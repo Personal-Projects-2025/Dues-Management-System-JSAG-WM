@@ -1,6 +1,4 @@
-import Member from '../models/Member.js';
-import ActivityLog from '../models/ActivityLog.js';
-import Receipt from '../models/Receipt.js';
+import { getTenantModels } from '../utils/tenantModels.js';
 import { generateReceiptPDFFromReceipt } from '../utils/pdfGenerator.js';
 import { sendEmail } from '../utils/mailer.js';
 import { renderPaymentReceiptEmail, renderPaymentReceiptText } from '../utils/emailTemplates.js';
@@ -15,6 +13,7 @@ const generateReceiptId = () => {
 
 export const recordPayment = async (req, res) => {
   try {
+    const { Member, ActivityLog, Receipt } = getTenantModels(req);
     const { memberId, amount, date, remarks } = req.body;
 
     if (!memberId || !amount) {
@@ -78,7 +77,7 @@ export const recordPayment = async (req, res) => {
     if (member.email) {
       try {
         const pdfBuffer = await generateReceiptPDFFromReceipt(receipt, member);
-        const groupName = process.env.GROUP_NAME || 'Group Dues';
+        const groupName = req.tenant?.config?.branding?.name || req.tenant?.name || process.env.GROUP_NAME || 'Dues Accountant';
         await sendEmail({
           to: [member.email],
           subject: `Your Dues Payment Receipt - ${groupName}`,
@@ -89,7 +88,8 @@ export const recordPayment = async (req, res) => {
               name: `receipt-${receipt.receiptId}.pdf`,
               content: pdfBuffer
             }
-          ]
+          ],
+          senderName: groupName
         });
         receiptEmailStatus = 'sent';
       } catch (emailError) {
@@ -134,6 +134,7 @@ export const recordPayment = async (req, res) => {
 
 export const getAllPayments = async (req, res) => {
   try {
+    const { Member } = getTenantModels(req);
     const { memberId, startDate, endDate, recordedBy } = req.query;
 
     let query = {};
@@ -174,6 +175,7 @@ export const getAllPayments = async (req, res) => {
 
 export const getPaymentById = async (req, res) => {
   try {
+    const { Member } = getTenantModels(req);
     const { memberId, paymentId } = req.params;
     const member = await Member.findById(memberId);
 

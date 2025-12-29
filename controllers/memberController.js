@@ -1,9 +1,8 @@
-import Member from '../models/Member.js';
-import ActivityLog from '../models/ActivityLog.js';
-import Subgroup from '../models/Subgroup.js';
+import { getTenantModels } from '../utils/tenantModels.js';
 
 export const getAllMembers = async (req, res) => {
   try {
+    const { Member } = getTenantModels(req);
     const { search, role } = req.query;
     let query = {};
 
@@ -41,6 +40,7 @@ export const getAllMembers = async (req, res) => {
 
 export const getMemberById = async (req, res) => {
   try {
+    const { Member } = getTenantModels(req);
     const member = await Member.findById(req.params.id).populate('subgroupId', 'name');
     if (!member) {
       return res.status(404).json({ error: 'Member not found' });
@@ -55,6 +55,7 @@ export const getMemberById = async (req, res) => {
 
 export const createMember = async (req, res) => {
   try {
+    const { Member, Subgroup, ActivityLog } = getTenantModels(req);
     const {
       name,
       memberId,
@@ -121,6 +122,7 @@ export const createMember = async (req, res) => {
 
 export const updateMember = async (req, res) => {
   try {
+    const { Member, Subgroup, ActivityLog } = getTenantModels(req);
     const {
       name,
       memberId,
@@ -182,6 +184,7 @@ export const updateMember = async (req, res) => {
 
 export const deleteMember = async (req, res) => {
   try {
+    const { Member, ActivityLog } = getTenantModels(req);
     const member = await Member.findById(req.params.id);
     if (!member) {
       return res.status(404).json({ error: 'Member not found' });
@@ -209,6 +212,7 @@ export const deleteMember = async (req, res) => {
 
 export const getMembersInArrears = async (req, res) => {
   try {
+    const { Member } = getTenantModels(req);
     const members = await Member.find().populate('subgroupId', 'name');
     const membersInArrears = members
       .map(member => {

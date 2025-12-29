@@ -1,5 +1,4 @@
-import Expenditure from '../models/Expenditure.js';
-import ActivityLog from '../models/ActivityLog.js';
+import { getTenantModels } from '../utils/tenantModels.js';
 
 // Generate unique expense ID
 const generateExpenseId = () => {
@@ -12,6 +11,7 @@ const generateExpenseId = () => {
 // Create expenditure
 export const createExpenditure = async (req, res) => {
   try {
+    const { Expenditure, ActivityLog } = getTenantModels(req);
     const { title, description, amount, category, date } = req.body;
 
     if (!title || !amount) {
@@ -62,6 +62,7 @@ export const createExpenditure = async (req, res) => {
 // Get all expenditures
 export const getAllExpenditures = async (req, res) => {
   try {
+    const { Expenditure } = getTenantModels(req);
     const { startDate, endDate, category } = req.query;
     let query = {};
 
@@ -85,6 +86,7 @@ export const getAllExpenditures = async (req, res) => {
 // Get expenditure by ID
 export const getExpenditureById = async (req, res) => {
   try {
+    const { Expenditure } = getTenantModels(req);
     const { id } = req.params;
     const expenditure = await Expenditure.findById(id);
 
@@ -101,6 +103,7 @@ export const getExpenditureById = async (req, res) => {
 // Update expenditure
 export const updateExpenditure = async (req, res) => {
   try {
+    const { Expenditure, ActivityLog } = getTenantModels(req);
     const { id } = req.params;
     const { title, description, amount, category, date } = req.body;
 
@@ -140,6 +143,7 @@ export const updateExpenditure = async (req, res) => {
 // Delete expenditure
 export const deleteExpenditure = async (req, res) => {
   try {
+    const { Expenditure, ActivityLog } = getTenantModels(req);
     const { id } = req.params;
     const expenditure = await Expenditure.findByIdAndDelete(id);
 
@@ -167,6 +171,7 @@ export const deleteExpenditure = async (req, res) => {
 // Get expenditure statistics
 export const getExpenditureStats = async (req, res) => {
   try {
+    const { Expenditure } = getTenantModels(req);
     const totalExpenditures = await Expenditure.aggregate([
       {
         $group: {
