@@ -10,6 +10,7 @@ import {
 import { authenticateToken } from '../middleware/authMiddleware.js';
 import { requireAdmin } from '../middleware/roleMiddleware.js';
 import { setTenantContext, requireTenant } from '../middleware/tenantMiddleware.js';
+import { validateMember, validateMongoId, validatePagination } from '../middleware/validationMiddleware.js';
 
 const router = express.Router();
 
@@ -19,12 +20,12 @@ router.use(setTenantContext);
 router.use(requireTenant);
 router.use(requireAdmin);
 
-router.get('/', getAllMembers);
+router.get('/', validatePagination, getAllMembers);
 router.get('/arrears', getMembersInArrears);
-router.get('/:id', getMemberById);
-router.post('/', createMember);
-router.put('/:id', updateMember);
-router.delete('/:id', deleteMember);
+router.get('/:id', validateMongoId, getMemberById);
+router.post('/', ...validateMember, createMember);
+router.put('/:id', validateMongoId, ...validateMember, updateMember);
+router.delete('/:id', validateMongoId, deleteMember);
 
 export default router;
 

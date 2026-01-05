@@ -76,7 +76,17 @@ export const recordPayment = async (req, res) => {
 
     if (member.email) {
       try {
-        const pdfBuffer = await generateReceiptPDFFromReceipt(receipt, member);
+        // Fetch all receipts for this member (for payment history table)
+        const allReceipts = await Receipt.find({ memberId: member._id }).sort({ createdAt: -1 });
+
+        // Extract full tenant information including contact details
+        const tenantData = req.tenant ? {
+          name: req.tenant.name,
+          config: req.tenant.config,
+          contact: req.tenant.contact || {}
+        } : null;
+
+        const pdfBuffer = await generateReceiptPDFFromReceipt(receipt, member, tenantData, allReceipts);
         const groupName = req.tenant?.config?.branding?.name || req.tenant?.name || process.env.GROUP_NAME || 'Dues Accountant';
         await sendEmail({
           to: [member.email],

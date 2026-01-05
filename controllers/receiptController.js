@@ -87,7 +87,17 @@ export const getReceiptPDF = async (req, res) => {
       return res.status(404).json({ error: 'Member not found' });
     }
 
-    const pdfBuffer = await generateReceiptPDFFromReceipt(receipt, member);
+    // Fetch all receipts for this member (for payment history table)
+    const allReceipts = await Receipt.find({ memberId: receipt.memberId }).sort({ createdAt: -1 });
+
+    // Extract full tenant information including contact details
+    const tenantData = req.tenant ? {
+      name: req.tenant.name,
+      config: req.tenant.config,
+      contact: req.tenant.contact || {}
+    } : null;
+
+    const pdfBuffer = await generateReceiptPDFFromReceipt(receipt, member, tenantData, allReceipts);
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=receipt-${receipt.receiptId}.pdf`);
@@ -144,7 +154,17 @@ export const resendReceiptEmail = async (req, res) => {
       return res.status(400).json({ error: 'Member does not have an email address on file' });
     }
 
-    const pdfBuffer = await generateReceiptPDFFromReceipt(receipt, member);
+    // Fetch all receipts for this member (for payment history table)
+    const allReceipts = await Receipt.find({ memberId: receipt.memberId }).sort({ createdAt: -1 });
+
+    // Extract full tenant information including contact details
+    const tenantData = req.tenant ? {
+      name: req.tenant.name,
+      config: req.tenant.config,
+      contact: req.tenant.contact || {}
+    } : null;
+
+    const pdfBuffer = await generateReceiptPDFFromReceipt(receipt, member, tenantData, allReceipts);
     const groupName = req.tenant?.config?.branding?.name || req.tenant?.name || process.env.GROUP_NAME || 'Dues Accountant';
 
     await sendEmail({
