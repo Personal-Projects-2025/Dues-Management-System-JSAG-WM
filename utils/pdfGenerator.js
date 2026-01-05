@@ -14,7 +14,7 @@ const calculateMonthsPaidFor = (member, receiptData) => {
   // Start from: joinDate + (monthsCovered BEFORE this payment)
   // End at: joinDate + (monthsCovered AFTER this payment)
   const monthsBeforePayment = member.monthsCovered - receiptData.monthsCovered;
-  const monthsAfterPayment = member.monthsCovered;
+  const monthsAfterPayment = member.monthsCovered + 1;
   
   const startDate = new Date(member.joinDate);
   startDate.setMonth(startDate.getMonth() + monthsBeforePayment);
@@ -113,10 +113,47 @@ const createServiceTable = (doc, receiptData, startY, pageWidth, margin) => {
   return currentY + rowHeight + 20;
 };
 
-// Helper function to create billing summary section
-const createSummarySection = (doc, receiptData, memberData, startY, pageWidth, margin, primaryColor) => {
-  let currentY = startY;
-  const startX = margin;
+// Helper function to draw rounded rectangle (card)
+const drawRoundedCard = (doc, x, y, width, height, radius, fillColor) => {
+  // Draw rounded rectangle using path (compatible with PDFKit)
+  doc.save();
+  
+  if (fillColor) {
+    doc.fillColor(fillColor);
+  }
+  
+  // Create rounded rectangle path
+  doc.moveTo(x + radius, y);
+  doc.lineTo(x + width - radius, y);
+  doc.quadraticCurveTo(x + width, y, x + width, y + radius);
+  doc.lineTo(x + width, y + height - radius);
+  doc.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  doc.lineTo(x + radius, y + height);
+  doc.quadraticCurveTo(x, y + height, x, y + height - radius);
+  doc.lineTo(x, y + radius);
+  doc.quadraticCurveTo(x, y, x + radius, y);
+  doc.closePath();
+  
+  if (fillColor) {
+    doc.fill();
+  }
+  
+  doc.restore();
+};
+
+// Helper function to create billing summary card (left side)
+const createSummaryCard = (doc, receiptData, memberData, startY, pageWidth, margin, primaryColor) => {
+  const cardWidth = (pageWidth - (margin * 2) - 16) / 2; // Half width minus gap
+  const cardX = margin;
+  const cardHeight = 100;
+  const radius = 6;
+  const padding = 16;
+  
+  // Draw card background
+  drawRoundedCard(doc, cardX, startY, cardWidth, cardHeight, radius, '#F9FAFB');
+  
+  let currentY = startY + padding;
+  const startX = cardX + padding;
   
   // Calculate values
   const monthsPaidFor = calculateMonthsPaidFor(memberData, receiptData);
@@ -128,20 +165,27 @@ const createSummarySection = (doc, receiptData, memberData, startY, pageWidth, m
   doc.text('Billing Summary', startX, currentY);
   currentY += 20;
   
-  // Summary items - compact labeled value pairs
+  // Summary items - compact labeled value pairs with proper spacing
   doc.fontSize(10).font('Helvetica').fillColor('#000000');
+  const labelValueSpacing = 12; // Space between label and value
   
   // Months Paid For
-  doc.text('Months Paid For:', startX, currentY);
-  doc.text(monthsPaidFor, startX + 120, currentY);
+  const monthsLabel = 'Months Paid For:';
+  doc.text(monthsLabel, startX, currentY);
+  const monthsLabelWidth = doc.widthOfString(monthsLabel);
+  doc.text(monthsPaidFor, startX + monthsLabelWidth + labelValueSpacing, currentY);
   currentY += 15;
   
   // Outstanding Balance (emphasized if > 0)
   if (outstandingBalance > 0) {
     doc.font('Helvetica-Bold').fontSize(11);
+  } else {
+    doc.font('Helvetica').fontSize(10);
   }
-  doc.text('Outstanding Balance:', startX, currentY);
-  doc.text(`GHS ${outstandingBalance.toFixed(2)}`, startX + 120, currentY);
+  const balanceLabel = 'Outstanding Balance:';
+  doc.text(balanceLabel, startX, currentY);
+  const balanceLabelWidth = doc.widthOfString(balanceLabel);
+  doc.text(`GHS ${outstandingBalance.toFixed(2)}`, startX + balanceLabelWidth + labelValueSpacing, currentY);
   currentY += 15;
   
   // Months in Arrears (emphasized if > 0)
@@ -150,36 +194,47 @@ const createSummarySection = (doc, receiptData, memberData, startY, pageWidth, m
   } else {
     doc.font('Helvetica').fontSize(10);
   }
-  doc.text('Months in Arrears:', startX, currentY);
-  doc.text(monthsInArrears.toString(), startX + 120, currentY);
+  const arrearsLabel = 'Month(s) in Arrears:';
+  doc.text(arrearsLabel, startX, currentY);
+  const arrearsLabelWidth = doc.widthOfString(arrearsLabel);
+  doc.text(monthsInArrears.toString(), startX + arrearsLabelWidth + labelValueSpacing, currentY);
   
   // Reset font
   doc.font('Helvetica').fontSize(10);
   
-  return currentY + 30;
+  return startY + cardHeight + 20; // Return Y position after card
 };
 
-// Helper function to create customer information section
-const createCustomerSection = (doc, memberData, receiptData, startY, pageWidth, margin) => {
-  let currentY = startY;
-  const startX = margin;
+// Helper function to create customer information card (right side)
+const createCustomerCard = (doc, memberData, receiptData, startY, pageWidth, margin) => {
+  const cardWidth = (pageWidth - (margin * 2) - 16) / 2; // Half width minus gap
+  const cardX = margin + cardWidth + 16; // Right card position
+  const cardHeight = 100;
+  const radius = 6;
+  const padding = 16;
+  
+  // Draw card background
+  drawRoundedCard(doc, cardX, startY, cardWidth, cardHeight, radius, '#F9FAFB');
+  
+  let currentY = startY + padding;
+  const startX = cardX + padding;
   
   // Section heading
   doc.fontSize(12).font('Helvetica-Bold').fillColor('#333333');
   doc.text('Bill to', startX, currentY);
-  currentY += 18;
+  currentY += 20;
   
   // Customer information
   doc.fontSize(10).font('Helvetica').fillColor('#000000');
   doc.text(memberData.name || receiptData.memberName, startX, currentY);
-  currentY += 12;
+  currentY += 15;
   
   if (memberData.email) {
     doc.text(memberData.email, startX, currentY);
-    currentY += 12;
+    currentY += 15;
   }
   
-  return currentY + 30;
+  return startY + cardHeight + 20; // Return Y position after card (same as left card)
 };
 
 // Helper function to create payment confirmation section
@@ -404,11 +459,11 @@ export const generateReceiptPDFFromReceipt = (receiptData, memberData, tenantDat
         }
       }
 
-      // BILLING SUMMARY SECTION - Grouped summary
-      currentY = createSummarySection(doc, receiptData, memberData, currentY, pageWidth, margin, primaryColor);
-
-      // CUSTOMER INFORMATION SECTION - Clean "Bill to" section
-      currentY = createCustomerSection(doc, memberData, receiptData, currentY, pageWidth, margin);
+      // BILLING SUMMARY & CUSTOMER CARDS - Side by side
+      const cardsStartY = currentY;
+      createSummaryCard(doc, receiptData, memberData, cardsStartY, pageWidth, margin, primaryColor);
+      createCustomerCard(doc, memberData, receiptData, cardsStartY, pageWidth, margin);
+      currentY = cardsStartY + 100 + 20; // Card height + spacing
 
       // PAYMENT CONFIRMATION SECTION - Prominent amount display
       currentY = createPaymentConfirmation(doc, receiptData, currentY, pageWidth, margin, primaryColor);
