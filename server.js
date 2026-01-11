@@ -18,6 +18,7 @@ import subgroupRoutes from './routes/subgroupRoutes.js';
 import reminderRoutes from './routes/reminderRoutes.js';
 import tenantRoutes from './routes/tenantRoutes.js';
 import tenantSetupRoutes from './routes/tenantSetupRoutes.js';
+import tenantApprovalRoutes from './routes/tenantApprovalRoutes.js';
 import systemRoutes from './routes/systemRoutes.js';
 import { initReminderScheduler } from './jobs/reminderScheduler.js';
 import { migrateToDemoTenant } from './scripts/migrateToTenant.js';
@@ -136,6 +137,7 @@ const initializeServer = async () => {
     app.use('/api/reminders', reminderRoutes);
     app.use('/api/tenants', tenantRoutes);
     app.use('/api/tenant-setup', tenantSetupRoutes);
+    app.use('/api/tenant-approval', tenantApprovalRoutes);
     app.use('/api/system', systemRoutes);
 
     // Initialize reminder scheduler
@@ -143,10 +145,9 @@ const initializeServer = async () => {
 
     // Start server
     app.listen(PORT, () => {
-      if (NODE_ENV === 'development') {
-        console.log(`Server running on port ${PORT}`);
-        console.log(`Environment: ${NODE_ENV}`);
-      }
+      console.log(`✅ Server running on port ${PORT}`);
+      console.log(`📍 Environment: ${NODE_ENV}`);
+      console.log(`🌐 API available at: http://localhost:${PORT}/api`);
     });
   } catch (error) {
     console.error('Failed to initialize server:', error.message);

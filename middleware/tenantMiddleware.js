@@ -118,8 +118,22 @@ export const setTenantContext = async (req, res, next) => {
       return res.status(404).json({ error: 'Tenant not found' });
     }
 
-    // Check if tenant is active
-    if (tenant.status !== 'active') {
+    // Handle different tenant statuses
+    if (tenant.status === 'rejected') {
+      return res.status(403).json({ 
+        error: 'Your organization registration has been rejected',
+        status: tenant.status,
+        rejectionReason: tenant.rejectionReason || 'No reason provided'
+      });
+    }
+    
+    if (tenant.status === 'pending') {
+      // Mark as pending but still allow connection for status viewing
+      req.isPendingTenant = true;
+      // Continue to set up connection - routes can check status if needed
+    }
+    
+    if (tenant.status !== 'active' && tenant.status !== 'pending') {
       return res.status(403).json({ 
         error: 'Tenant is not active',
         status: tenant.status 

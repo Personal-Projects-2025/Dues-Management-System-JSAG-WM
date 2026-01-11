@@ -55,9 +55,8 @@ const userSchema = new mongoose.Schema({
   }
 });
 
-// Indexes
-userSchema.index({ email: 1 });
-userSchema.index({ username: 1 });
+// Note: Indexes for 'username' and 'email' are automatically created by Mongoose
+// due to the 'unique: true' constraint in the schema definition above
 
 // Method to compare password
 userSchema.methods.comparePassword = async function(candidatePassword) {

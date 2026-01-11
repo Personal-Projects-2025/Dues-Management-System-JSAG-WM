@@ -34,8 +34,26 @@ const tenantSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['active', 'inactive', 'archived'],
-    default: 'active'
+    enum: ['pending', 'active', 'inactive', 'rejected', 'archived'],
+    default: 'pending'
+  },
+  memberIdCounter: {
+    type: Number,
+    default: 0
+  },
+  rejectionReason: {
+    type: String,
+    trim: true,
+    default: null
+  },
+  approvedAt: {
+    type: Date,
+    default: null
+  },
+  approvedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
   },
   config: {
     branding: {
@@ -98,8 +116,8 @@ tenantSchema.methods.restore = async function() {
 };
 
 // Indexes
-tenantSchema.index({ slug: 1 });
-tenantSchema.index({ databaseName: 1 });
+// Note: Indexes for 'slug' and 'databaseName' are automatically created by Mongoose
+// due to the 'unique: true' constraint in the schema definition above
 tenantSchema.index({ status: 1 });
 tenantSchema.index({ deletedAt: 1 });
 

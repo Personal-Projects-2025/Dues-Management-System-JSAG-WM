@@ -45,6 +45,17 @@ export const validateMember = [
     .trim()
     .isLength({ max: 50 })
     .withMessage('Member ID must be less than 50 characters'),
+  body('autoGenerateId')
+    .optional()
+    .isBoolean()
+    .withMessage('autoGenerateId must be a boolean value'),
+  body().custom((value) => {
+    // If autoGenerateId is true, memberId should not be provided
+    if (value.autoGenerateId === true && value.memberId) {
+      throw new Error('Cannot provide memberId when autoGenerateId is enabled');
+    }
+    return true;
+  }),
   body('contact')
     .optional()
     .trim()

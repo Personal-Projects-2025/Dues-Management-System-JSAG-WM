@@ -45,10 +45,27 @@ export const login = async (req, res) => {
       const Tenant = await getTenantModel();
       tenant = await Tenant.findById(user.tenantId);
       
-      // Validate tenant is active
-      if (!tenant || tenant.status !== 'active' || tenant.deletedAt) {
+      // Handle different tenant statuses
+      if (!tenant || tenant.deletedAt) {
         return res.status(403).json({ 
           error: 'Your account is associated with an inactive tenant' 
+        });
+      }
+      
+      if (tenant.status === 'rejected') {
+        return res.status(403).json({ 
+          error: 'Your organization registration has been rejected',
+          rejectionReason: tenant.rejectionReason || 'No reason provided'
+        });
+      }
+      
+      if (tenant.status === 'pending') {
+        // Allow login for pending tenants (they have read-only access)
+        // Status will be checked in tenantMiddleware
+      } else if (tenant.status !== 'active') {
+        return res.status(403).json({ 
+          error: 'Your account is associated with an inactive tenant',
+          status: tenant.status
         });
       }
     }
@@ -80,7 +97,8 @@ export const login = async (req, res) => {
       tenant: user.role === 'system' ? null : (tenant ? {
         id: tenant._id,
         name: tenant.name,
-        slug: tenant.slug
+        slug: tenant.slug,
+        status: tenant.status
       } : null),
       isSystemUser: user.role === 'system'
     });
@@ -374,9 +392,23 @@ export const refreshToken = async (req, res) => {
       const Tenant = await getTenantModel();
       tenant = await Tenant.findById(user.tenantId);
       
-      if (!tenant || tenant.status !== 'active' || tenant.deletedAt) {
+      if (!tenant || tenant.deletedAt) {
         return res.status(403).json({ 
           error: 'Your account is associated with an inactive tenant' 
+        });
+      }
+      
+      if (tenant.status === 'rejected') {
+        return res.status(403).json({ 
+          error: 'Your organization registration has been rejected',
+          rejectionReason: tenant.rejectionReason || 'No reason provided'
+        });
+      }
+      
+      if (tenant.status !== 'active' && tenant.status !== 'pending') {
+        return res.status(403).json({ 
+          error: 'Your account is associated with an inactive tenant',
+          status: tenant.status
         });
       }
     }
@@ -407,7 +439,8 @@ export const refreshToken = async (req, res) => {
       tenant: user.role === 'system' ? null : (tenant ? {
         id: tenant._id,
         name: tenant.name,
-        slug: tenant.slug
+        slug: tenant.slug,
+        status: tenant.status
       } : null),
       isSystemUser: user.role === 'system'
     });
