@@ -261,7 +261,7 @@ export const register = async (req, res) => {
       const { sendEmail } = await import('../utils/mailer.js');
       const { renderUserCreationEmail, renderUserCreationText } = await import('../utils/userCreationEmail.js');
       
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const frontendUrl = process.env.FRONTEND_URL || 'https://duesaccountant.winswardtech.com';
       const setupLink = `${frontendUrl}/reset-password?token=${resetToken}`;
       const loginUrl = `${frontendUrl}/login`;
 

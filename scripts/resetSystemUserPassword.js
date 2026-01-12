@@ -23,18 +23,18 @@ const generateSecurePassword = () => {
 };
 
 /**
- * Create the first System User
- * Usage: node scripts/createSystemUser.js <username> [password]
- * If password is not provided, a secure password will be auto-generated
+ * Reset password for an existing system user
+ * Usage: node scripts/resetSystemUserPassword.js <username> [newPassword]
+ * If newPassword is not provided, a secure password will be auto-generated
  */
-const createSystemUser = async () => {
+const resetSystemUserPassword = async () => {
   try {
     const username = process.argv[2];
     const providedPassword = process.argv[3];
 
     if (!username) {
-      console.error('Usage: node scripts/createSystemUser.js <username> [password]');
-      console.error('If password is not provided, a secure password will be auto-generated and emailed.');
+      console.error('Usage: node scripts/resetSystemUserPassword.js <username> [newPassword]');
+      console.error('If newPassword is not provided, a secure password will be auto-generated and emailed.');
       process.exit(1);
     }
 
@@ -46,74 +46,60 @@ const createSystemUser = async () => {
       process.exit(1);
     }
 
-    // Generate password if not provided
-    let password = providedPassword;
-    let passwordGenerated = false;
-    if (!password) {
-      password = generateSecurePassword();
-      passwordGenerated = true;
-      console.log('🔐 Generating secure password...');
-    } else {
-      if (password.length < 8) {
-        console.error('❌ Error: Password must be at least 8 characters long');
-        process.exit(1);
-      }
-    }
-
     await connectMasterDB();
     console.log('Connected to master database');
 
     const User = await getUserModel();
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ username });
-    if (existingUser) {
-      console.error(`User ${username} already exists`);
+    // Find the system user
+    const user = await User.findOne({ username, role: 'system' });
+    if (!user) {
+      console.error(`❌ Error: System user "${username}" not found.`);
+      console.error('   Make sure the username is correct and the user has role "system".');
       process.exit(1);
     }
 
-    // Check if system user already exists
-    const existingSystemUser = await User.findOne({ role: 'system' });
-    if (existingSystemUser) {
-      console.warn(`Warning: A system user already exists (${existingSystemUser.username})`);
-      console.warn('You can still create another system user if needed.');
+    console.log(`\n✅ Found system user: ${username}`);
+    console.log(`   Email: ${user.email || 'Not set'}`);
+
+    // Generate password if not provided
+    let newPassword = providedPassword;
+    let passwordGenerated = false;
+    if (!newPassword) {
+      newPassword = generateSecurePassword();
+      passwordGenerated = true;
+      console.log('🔐 Generating secure password...');
+    } else {
+      if (newPassword.length < 8) {
+        console.error('❌ Error: Password must be at least 8 characters long');
+        process.exit(1);
+      }
     }
 
-    // Create system user
-    const passwordHash = await bcrypt.hash(password, 10);
-    const systemUser = new User({
-      username,
-      passwordHash,
-      role: 'system',
-      tenantId: null // System users don't have tenantId
-    });
+    // Update password hash
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    user.passwordHash = passwordHash;
+    await user.save();
 
-    await systemUser.save();
+    console.log('\n✅ Password reset successfully!');
 
-    console.log('\n✅ System User created successfully!');
-    console.log(`Username: ${username}`);
-    console.log(`Role: system`);
-
-    // Send email with credentials
+    // Send email with new credentials
     try {
       const { sendEmail } = await import('../utils/mailer.js');
       const { renderUserCreationEmail, renderUserCreationText } = await import('../utils/userCreationEmail.js');
       
       const frontendUrl = process.env.FRONTEND_URL || 'https://duesaccountant.winswardtech.com';
       const loginUrl = `${frontendUrl}/login`;
-      
-      // For system users, we don't need a setup link (they can change password after login)
-      // But we'll provide a placeholder to avoid template errors
       const setupLink = `${frontendUrl}/reset-password`;
 
       console.log('\n📧 Attempting to send email...');
       const emailResult = await sendEmail({
         to: systemOwnerEmail,
-        subject: 'System User Account Created - Dues Accountant',
+        subject: 'System User Password Reset - Dues Accountant',
         html: renderUserCreationEmail({
           username: username,
           email: systemOwnerEmail,
-          password: password,
+          password: newPassword,
           setupLink: setupLink,
           loginUrl: loginUrl,
           role: 'system'
@@ -121,7 +107,7 @@ const createSystemUser = async () => {
         text: renderUserCreationText({
           username: username,
           email: systemOwnerEmail,
-          password: password,
+          password: newPassword,
           setupLink: setupLink,
           loginUrl: loginUrl,
           role: 'system'
@@ -133,40 +119,53 @@ const createSystemUser = async () => {
       if (emailResult?.skipped) {
         console.warn('\n⚠️  WARNING: Email sending is disabled (EMAIL_ENABLED=false)');
         console.warn('Email was NOT sent. Please save these credentials manually:');
+        console.warn(`\n   Username: ${username}`);
+        console.warn(`   New Password: ${newPassword}`);
+        console.warn(`   Email: ${systemOwnerEmail}`);
+        console.warn(`   Login URL: ${loginUrl}`);
       } else if (emailResult?.ok) {
         console.log(`\n✅ Email sent successfully to: ${systemOwnerEmail}`);
         if (passwordGenerated) {
           console.log('🔑 A secure password has been auto-generated and included in the email.');
         }
-        console.log('\n📋 IMPORTANT: Please check your email inbox (and spam folder) for the credentials.');
+        console.log('\n📋 IMPORTANT: Please check your email inbox (and spam folder) for the new password.');
       } else {
         console.warn('\n⚠️  WARNING: Email result unclear. Please verify email configuration.');
-        console.warn('Credentials saved below - please send manually if email was not received:');
+        console.warn('New credentials saved below - please send manually if email was not received:');
+        console.warn(`\n   Username: ${username}`);
+        console.warn(`   New Password: ${newPassword}`);
+        console.warn(`   Email: ${systemOwnerEmail}`);
+        console.warn(`   Login URL: ${loginUrl}`);
       }
 
-      // ALWAYS display password in console as backup (in case email fails or is not received)
+      // ALWAYS display password in console (in case email fails)
       console.log('\n' + '='.repeat(60));
-      console.log('🔑 LOGIN CREDENTIALS (SAVE THIS SECURELY):');
+      console.log('🔑 NEW PASSWORD (SAVE THIS SECURELY):');
       console.log('='.repeat(60));
       console.log(`Username: ${username}`);
-      console.log(`Password: ${password}`);
-      console.log(`Email: ${systemOwnerEmail}`);
+      console.log(`Password: ${newPassword}`);
       console.log(`Login URL: ${loginUrl}`);
       console.log('='.repeat(60));
       console.log('\n⚠️  IMPORTANT: Save these credentials immediately!');
       console.log('   The password is displayed here in case email was not received.\n');
+
     } catch (emailError) {
-      console.error('\n❌ ERROR: Failed to send email with credentials');
+      console.error('\n❌ ERROR: Failed to send email with new password');
       console.error('Error details:', emailError.message);
       if (emailError.stack && process.env.NODE_ENV === 'development') {
         console.error('Stack:', emailError.stack);
       }
-      console.error('\n⚠️  IMPORTANT: User was created but email failed. Please save these credentials:');
-      console.error(`\n   Username: ${username}`);
-      console.error(`   Password: ${password}`);
-      console.error(`   Email: ${systemOwnerEmail}`);
-      console.error(`   Login URL: ${process.env.FRONTEND_URL || 'https://duesaccountant.winswardtech.com'}/login`);
-      console.error('\n⚠️  You may need to manually send the credentials to the system owner.');
+      
+      // CRITICAL: Always show password if email fails
+      console.error('\n' + '='.repeat(60));
+      console.error('🔑 NEW PASSWORD (EMAIL FAILED - SAVE THIS):');
+      console.error('='.repeat(60));
+      console.error(`Username: ${username}`);
+      console.error(`Password: ${newPassword}`);
+      console.error(`Email: ${systemOwnerEmail}`);
+      console.error(`Login URL: ${process.env.FRONTEND_URL || 'https://duesaccountant.winswardtech.com'}/login`);
+      console.error('='.repeat(60));
+      console.error('\n⚠️  You must manually save and send these credentials!');
       console.error('\n💡 Troubleshooting:');
       console.error('   1. Check EMAIL_ENABLED in .env (should be "true")');
       console.error('   2. Verify BREVO_API_KEY or SMTP configuration');
@@ -179,11 +178,9 @@ const createSystemUser = async () => {
 
     process.exit(0);
   } catch (error) {
-    console.error('Error creating system user:', error);
+    console.error('Error resetting password:', error);
     process.exit(1);
   }
 };
 
-createSystemUser();
-
-
+resetSystemUserPassword();

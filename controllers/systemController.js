@@ -152,7 +152,7 @@ export const createSystemUser = async (req, res) => {
 
     // Send welcome email with credentials and setup link
     try {
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const frontendUrl = process.env.FRONTEND_URL || 'https://duesaccountant.winswardtech.com';
       const setupLink = `${frontendUrl}/reset-password?token=${resetToken}`;
       const loginUrl = `${frontendUrl}/login`;
 

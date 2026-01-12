@@ -187,7 +187,7 @@ export const registerTenant = async (req, res) => {
       const { sendEmail } = await import('../utils/mailer.js');
       const { renderTenantRegistrationConfirmationEmail, renderTenantRegistrationConfirmationText } = await import('../utils/templates/tenantRegistrationConfirmationEmail.js');
       
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const frontendUrl = process.env.FRONTEND_URL || 'https://duesaccountant.winswardtech.com';
       const loginUrl = `${frontendUrl}/login`;
       const supportEmail = process.env.SUPPORT_EMAIL || process.env.SYSTEM_OWNER_EMAIL;
       
@@ -231,7 +231,7 @@ export const registerTenant = async (req, res) => {
       const { renderTenantApprovalEmail, renderTenantApprovalText } = await import('../utils/templates/tenantApprovalEmail.js');
       
       const systemOwnerEmail = process.env.SYSTEM_OWNER_EMAIL;
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const frontendUrl = process.env.FRONTEND_URL || 'https://duesaccountant.winswardtech.com';
       const dashboardUrl = `${frontendUrl}/tenant-approval`;
       
       if (systemOwnerEmail) {
