@@ -39,9 +39,33 @@ export const getTenantConnection = async (databaseName) => {
     }
 
     // Extract connection string without database name
-    const uriParts = baseUri.split('/');
-    const baseConnectionString = uriParts.slice(0, -1).join('/');
-    const tenantUri = `${baseConnectionString}/${databaseName}`;
+    // Handle both URIs with and without database names
+    let baseConnectionString;
+    let queryParams = '';
+    
+    // Separate query params from URI
+    const uriWithoutQuery = baseUri.split('?')[0];
+    if (baseUri.includes('?')) {
+      queryParams = '?' + baseUri.split('?').slice(1).join('?');
+    }
+    
+    const uriParts = uriWithoutQuery.split('/');
+    
+    // Check if the last part looks like a database name (not a hostname with : or @)
+    const lastPart = uriParts[uriParts.length - 1];
+    
+    // If the last part contains @ or :, it's likely a hostname, not a database name
+    // Database names typically don't contain @ or :, while hostnames in URIs do
+    // Also check if URI has enough parts (mongodb:// is 3 parts, need at least 4 for a database name)
+    if (lastPart.includes('@') || lastPart.includes(':') || uriParts.length < 4) {
+      // No database name in URI, use the entire URI (without query params) as base
+      baseConnectionString = uriWithoutQuery;
+    } else {
+      // URI has a database name, remove it
+      baseConnectionString = uriParts.slice(0, -1).join('/');
+    }
+    
+    const tenantUri = `${baseConnectionString}/${databaseName}${queryParams}`;
 
     // Create new connection
     const conn = mongoose.createConnection(tenantUri, {
