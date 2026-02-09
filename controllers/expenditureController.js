@@ -12,7 +12,7 @@ const generateExpenseId = () => {
 export const createExpenditure = async (req, res) => {
   try {
     const { Expenditure, ActivityLog } = getTenantModels(req);
-    const { title, description, amount, category, date } = req.body;
+    const { title, description, amount, category, date, fundedByContributionTypeId } = req.body;
 
     if (!title || !amount) {
       return res.status(400).json({ error: 'Title and amount are required' });
@@ -34,6 +34,7 @@ export const createExpenditure = async (req, res) => {
       category: category || '',
       date: date ? new Date(date) : new Date(),
       spentBy: req.user.username,
+      fundedByContributionTypeId: fundedByContributionTypeId || null,
       createdAt: new Date()
     });
 
@@ -76,7 +77,9 @@ export const getAllExpenditures = async (req, res) => {
       query.category = category;
     }
 
-    const expenditures = await Expenditure.find(query).sort({ date: -1 });
+    const expenditures = await Expenditure.find(query)
+      .populate('fundedByContributionTypeId', 'name')
+      .sort({ date: -1 });
     res.json(expenditures);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -105,7 +108,7 @@ export const updateExpenditure = async (req, res) => {
   try {
     const { Expenditure, ActivityLog } = getTenantModels(req);
     const { id } = req.params;
-    const { title, description, amount, category, date } = req.body;
+    const { title, description, amount, category, date, fundedByContributionTypeId } = req.body;
 
     const expenditure = await Expenditure.findById(id);
     if (!expenditure) {
@@ -117,6 +120,7 @@ export const updateExpenditure = async (req, res) => {
     if (amount) expenditure.amount = parseFloat(amount);
     if (category !== undefined) expenditure.category = category;
     if (date) expenditure.date = new Date(date);
+    if (fundedByContributionTypeId !== undefined) expenditure.fundedByContributionTypeId = fundedByContributionTypeId || null;
 
     await expenditure.save();
 

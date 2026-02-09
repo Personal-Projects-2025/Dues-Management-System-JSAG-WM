@@ -140,6 +140,77 @@ export const validateExpenditure = [
     .trim()
     .isLength({ max: 500 })
     .withMessage('Description must be less than 500 characters'),
+  body('fundedByContributionTypeId')
+    .optional({ checkFalsy: true })
+    .isMongoId()
+    .withMessage('Funded by contribution type must be a valid ID'),
+  handleValidationErrors,
+];
+
+/**
+ * Validation rules for contribution creation
+ */
+export const validateContribution = [
+  body('contributionTypeId')
+    .notEmpty()
+    .withMessage('Contribution type is required')
+    .isMongoId()
+    .withMessage('Contribution type must be a valid ID'),
+  body('amount')
+    .notEmpty()
+    .withMessage('Amount is required')
+    .isFloat({ min: 0.01 })
+    .withMessage('Amount must be a positive number'),
+  body('date')
+    .optional()
+    .isISO8601()
+    .withMessage('Date must be a valid ISO 8601 date'),
+  body('memberId')
+    .optional({ checkFalsy: true })
+    .isMongoId()
+    .withMessage('Member ID must be a valid MongoDB ID'),
+  body('remarks')
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('Remarks must be less than 500 characters'),
+  handleValidationErrors,
+];
+
+/**
+ * Validation rules for contribution type creation
+ */
+export const validateContributionType = [
+  body('name')
+    .trim()
+    .notEmpty()
+    .withMessage('Name is required')
+    .isLength({ min: 1, max: 100 })
+    .withMessage('Name must be between 1 and 100 characters'),
+  body('description')
+    .optional()
+    .trim()
+    .isLength({ max: 200 })
+    .withMessage('Description must be less than 200 characters'),
+  handleValidationErrors,
+];
+
+/**
+ * Validation rules for contribution type update (partial)
+ */
+export const validateContributionTypeUpdate = [
+  body('name')
+    .optional()
+    .trim()
+    .notEmpty()
+    .withMessage('Name cannot be empty')
+    .isLength({ min: 1, max: 100 })
+    .withMessage('Name must be between 1 and 100 characters'),
+  body('description')
+    .optional()
+    .trim()
+    .isLength({ max: 200 })
+    .withMessage('Description must be less than 200 characters'),
   handleValidationErrors,
 ];
 

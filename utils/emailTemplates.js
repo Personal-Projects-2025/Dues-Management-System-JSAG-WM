@@ -40,6 +40,66 @@ Blessings,
 ${groupName} Accounts Team`;
 };
 
+export const renderContributionReceiptEmail = ({ receipt, recipientName }) => {
+  const groupName = process.env.GROUP_NAME || 'Dues Accountant';
+  const typeName = receipt.contributionTypeName || 'Contribution';
+  return `
+    <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
+      <h2 style="color: #2563eb;">${groupName} &mdash; Contribution Receipt</h2>
+      <p>Hello ${recipientName},</p>
+      <p>Please find the receipt for a contribution of <strong>${formatCurrency(receipt.amount)}</strong> (${typeName}) recorded on <strong>${new Date(receipt.paymentDate).toLocaleString()}</strong>.</p>
+      <p>Receipt ID: <strong>${receipt.receiptId}</strong></p>
+      <p>The official PDF receipt is attached for your records.</p>
+      <p style="margin-top: 24px;">Blessings,<br/>${groupName} Accounts Team</p>
+    </div>
+  `;
+};
+
+export const renderContributionReceiptText = ({ receipt, recipientName }) => {
+  const groupName = process.env.GROUP_NAME || 'Dues Accountant';
+  const typeName = receipt.contributionTypeName || 'Contribution';
+  return `Hello ${recipientName},
+
+Please find the receipt for a contribution of ${formatCurrency(receipt.amount)} (${typeName}) recorded on ${new Date(receipt.paymentDate).toLocaleString()}.
+
+Receipt ID: ${receipt.receiptId}
+
+The PDF receipt is attached for your records.
+
+Blessings,
+${groupName} Accounts Team`;
+};
+
+export const renderRecorderReceiptEmail = ({ receipt, recipientName, paymentDescription }) => {
+  const groupName = process.env.GROUP_NAME || 'Dues Accountant';
+  const desc = paymentDescription || receipt.contributionTypeName || 'contribution';
+  return `
+    <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
+      <h2 style="color: #2563eb;">${groupName} &mdash; Receipt (Recorded by You)</h2>
+      <p>Hello ${recipientName},</p>
+      <p>Please find the receipt for the ${desc} of <strong>${formatCurrency(receipt.amount)}</strong> that you recorded on <strong>${new Date(receipt.paymentDate).toLocaleString()}</strong>.</p>
+      <p>Receipt ID: <strong>${receipt.receiptId}</strong></p>
+      <p>The PDF receipt is attached for your records.</p>
+      <p style="margin-top: 24px;">Blessings,<br/>${groupName} Accounts Team</p>
+    </div>
+  `;
+};
+
+export const renderRecorderReceiptText = ({ receipt, recipientName, paymentDescription }) => {
+  const groupName = process.env.GROUP_NAME || 'Dues Accountant';
+  const desc = paymentDescription || receipt.contributionTypeName || 'contribution';
+  return `Hello ${recipientName},
+
+Please find the receipt for the ${desc} of ${formatCurrency(receipt.amount)} that you recorded on ${new Date(receipt.paymentDate).toLocaleString()}.
+
+Receipt ID: ${receipt.receiptId}
+
+The PDF receipt is attached for your records.
+
+Blessings,
+${groupName} Accounts Team`;
+};
+
 const scriptureVerses = [
   {
     reference: 'Proverbs 3:9',

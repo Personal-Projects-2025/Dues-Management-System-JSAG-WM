@@ -157,6 +157,11 @@ export const expenditureSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  fundedByContributionTypeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ContributionType',
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -165,21 +170,26 @@ export const expenditureSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Receipt Schema
+// Receipt Schema (supports dues and contribution receipts)
 export const receiptSchema = new mongoose.Schema({
   receiptId: {
     type: String,
     unique: true,
     required: true
   },
+  receiptType: {
+    type: String,
+    enum: ['dues', 'contribution'],
+    default: 'dues'
+  },
   memberId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Member',
-    required: true
+    default: null
   },
   memberName: {
     type: String,
-    required: true
+    default: ''
   },
   amount: {
     type: Number,
@@ -187,11 +197,11 @@ export const receiptSchema = new mongoose.Schema({
   },
   duesPerMonth: {
     type: Number,
-    required: true
+    default: null
   },
   monthsCovered: {
     type: Number,
-    required: true
+    default: null
   },
   paymentDate: {
     type: Date,
@@ -211,7 +221,16 @@ export const receiptSchema = new mongoose.Schema({
   },
   paymentId: {
     type: mongoose.Schema.Types.ObjectId,
-    required: true
+    default: null
+  },
+  contributionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Contribution',
+    default: null
+  },
+  contributionTypeName: {
+    type: String,
+    default: ''
   }
 }, {
   timestamps: true
@@ -260,6 +279,63 @@ export const reminderSchema = new mongoose.Schema({
   sentAt: {
     type: Date,
     default: Date.now
+  }
+}, {
+  timestamps: true
+});
+
+// Contribution Type Schema (tenant-defined types: Dues, Donation, etc.)
+export const contributionTypeSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  description: {
+    type: String,
+    trim: true
+  },
+  isSystem: {
+    type: Boolean,
+    default: false
+  }
+}, {
+  timestamps: true
+});
+
+// Contribution Schema (unified inflow record)
+export const contributionSchema = new mongoose.Schema({
+  contributionTypeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ContributionType',
+    required: true
+  },
+  amount: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  date: {
+    type: Date,
+    required: true,
+    default: Date.now
+  },
+  recordedBy: {
+    type: String,
+    required: true
+  },
+  memberId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Member',
+    default: null
+  },
+  remarks: {
+    type: String,
+    default: ''
+  },
+  receiptId: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true

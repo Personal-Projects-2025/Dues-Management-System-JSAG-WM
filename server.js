@@ -14,6 +14,8 @@ import reportRoutes from './routes/reportRoutes.js';
 import logRoutes from './routes/logRoutes.js';
 import receiptRoutes from './routes/receiptRoutes.js';
 import expenditureRoutes from './routes/expenditureRoutes.js';
+import contributionRoutes from './routes/contributionRoutes.js';
+import contributionTypeRoutes from './routes/contributionTypeRoutes.js';
 import subgroupRoutes from './routes/subgroupRoutes.js';
 import reminderRoutes from './routes/reminderRoutes.js';
 import tenantRoutes from './routes/tenantRoutes.js';
@@ -93,9 +95,11 @@ const generalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 login attempts per windowMs
+  max: NODE_ENV === 'production' ? 10 : 50, // More lenient in development, stricter in production
   message: 'Too many login attempts, please try again later.',
   skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 // Apply rate limiting
@@ -133,6 +137,8 @@ const initializeServer = async () => {
     app.use('/api/logs', logRoutes);
     app.use('/api/receipts', receiptRoutes);
     app.use('/api/expenditure', expenditureRoutes);
+    app.use('/api/contributions', contributionRoutes);
+    app.use('/api/contribution-types', contributionTypeRoutes);
     app.use('/api/subgroups', subgroupRoutes);
     app.use('/api/reminders', reminderRoutes);
     app.use('/api/tenants', tenantRoutes);

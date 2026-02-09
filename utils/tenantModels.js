@@ -9,7 +9,9 @@ import {
   expenditureSchema,
   receiptSchema,
   reminderSchema,
-  activityLogSchema
+  activityLogSchema,
+  contributionTypeSchema,
+  contributionSchema
 } from '../models/schemas.js';
 import { getTenantModel } from './modelFactory.js';
 
@@ -29,7 +31,9 @@ export const getTenantModels = (req) => {
     Expenditure: getTenantModel(req.tenantConnection, 'Expenditure', expenditureSchema),
     Receipt: getTenantModel(req.tenantConnection, 'Receipt', receiptSchema),
     Reminder: getTenantModel(req.tenantConnection, 'Reminder', reminderSchema),
-    ActivityLog: getTenantModel(req.tenantConnection, 'ActivityLog', activityLogSchema)
+    ActivityLog: getTenantModel(req.tenantConnection, 'ActivityLog', activityLogSchema),
+    ContributionType: getTenantModel(req.tenantConnection, 'ContributionType', contributionTypeSchema),
+    Contribution: getTenantModel(req.tenantConnection, 'Contribution', contributionSchema)
   };
 };
 

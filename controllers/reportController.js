@@ -4,7 +4,7 @@ import { generateReportPDF } from '../utils/pdfGenerator.js';
 
 export const getDashboardStats = async (req, res) => {
   try {
-    const { Member, Expenditure, Subgroup } = getTenantModels(req);
+    const { Member, Expenditure, Subgroup, Contribution, ContributionType } = getTenantModels(req);
     const members = await Member.find();
     const totalMembers = members.length;
     
@@ -26,6 +26,17 @@ export const getDashboardStats = async (req, res) => {
       role: { $in: ['admin', 'super'] },
       tenantId: req.tenantId 
     });
+
+    // Add contributions from Contribution model (exclude Dues+member - those are in member.totalPaid)
+    const duesType = await ContributionType.findOne({ name: 'Dues' });
+    const contributions = await Contribution.find();
+    const contributionTotal = contributions
+      .filter((c) => {
+        const isDuesWithMember = duesType && c.memberId && c.contributionTypeId?.toString() === duesType._id.toString();
+        return !isDuesWithMember;
+      })
+      .reduce((sum, c) => sum + (c.amount || 0), 0);
+    totalCollected += contributionTotal;
 
     // Get total expenditures
     const expenditures = await Expenditure.find();
@@ -102,6 +113,14 @@ export const getDashboardStats = async (req, res) => {
           monthlyIncome[monthKey] += payment.amount;
         }
       });
+    });
+
+    contributions.forEach(c => {
+      const contribDate = new Date(c.date);
+      const monthKey = `${contribDate.getFullYear()}-${String(contribDate.getMonth() + 1).padStart(2, '0')}`;
+      if (monthlyIncome[monthKey] !== undefined) {
+        monthlyIncome[monthKey] += c.amount || 0;
+      }
     });
 
     expenditures.forEach(exp => {

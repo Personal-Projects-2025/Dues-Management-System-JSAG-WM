@@ -385,7 +385,200 @@ export const generateReceiptPDF = (paymentData, memberData) => {
   });
 };
 
+/** Generate a modern PDF for contribution receipts (non-dues or when member not linked) */
+export const generateContributionReceiptPDF = (receiptData, tenantData = null) => {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ margin: 50, size: 'LETTER' });
+      const chunks = [];
+      doc.on('data', chunk => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const pageWidth = doc.page.width;
+      const pageHeight = doc.page.height;
+      const margin = 50;
+      let currentY = margin + 20;
+
+      const tenantName = tenantData?.config?.branding?.name || tenantData?.name || '';
+      const tenantAddress = tenantData?.contact?.address || '';
+      const tenantEmail = tenantData?.contact?.email || '';
+      const tenantPhone = tenantData?.contact?.phone || '';
+      const primaryColor = tenantData?.config?.branding?.primaryColor || '#3B82F6';
+      const secondaryColor = tenantData?.config?.branding?.secondaryColor || '#1E40AF';
+
+      // HEADER
+      doc.fontSize(30).font('Helvetica-Bold').fillColor(primaryColor);
+      doc.text('Receipt', margin, currentY);
+
+      if (tenantName) {
+        doc.fontSize(18).font('Helvetica-Bold').fillColor('#333333');
+        const tenantNameWidth = doc.widthOfString(tenantName);
+        doc.text(tenantName, pageWidth - margin - tenantNameWidth, currentY);
+      }
+
+      currentY += 35;
+
+      // Receipt metadata
+      doc.fontSize(10).font('Helvetica').fillColor('#666666');
+      doc.text(`Receipt number ${receiptData.receiptId}`, margin, currentY);
+      currentY += 12;
+      doc.text(`Date paid ${formatDateRenderStyle(receiptData.paymentDate)}`, margin, currentY);
+      currentY += 40;
+
+      // Company info block (right side)
+      if (tenantAddress || tenantEmail || tenantPhone) {
+        const companyY = margin + 20;
+        doc.fontSize(10).font('Helvetica').fillColor('#666666');
+        let companyInfoY = companyY + 35;
+
+        if (tenantAddress) {
+          const addressLines = tenantAddress.split('\n').filter(line => line.trim());
+          addressLines.forEach(line => {
+            doc.text(line, pageWidth - margin - 200, companyInfoY, { width: 200, align: 'right' });
+            companyInfoY += 12;
+          });
+        }
+
+        if (tenantEmail) {
+          doc.text(tenantEmail, pageWidth - margin - 200, companyInfoY, { width: 200, align: 'right' });
+          companyInfoY += 12;
+        }
+
+        if (tenantPhone) {
+          doc.text(tenantPhone, pageWidth - margin - 200, companyInfoY, { width: 200, align: 'right' });
+        }
+      }
+
+      // CONTRIBUTION SUMMARY CARD
+      const cardWidth = (pageWidth - (margin * 2) - 16) / 2;
+      const cardHeight = 110;
+      const radius = 6;
+      const padding = 16;
+      const leftCardX = margin;
+      const rightCardX = margin + cardWidth + 16;
+
+      const cardsStartY = currentY;
+
+      // Left card: Contribution details
+      drawRoundedCard(doc, leftCardX, cardsStartY, cardWidth, cardHeight, radius, '#F9FAFB');
+
+      let leftY = cardsStartY + padding;
+      let leftX = leftCardX + padding;
+
+      const typeName = receiptData.contributionTypeName || 'Contribution';
+
+      doc.fontSize(12).font('Helvetica-Bold').fillColor(primaryColor);
+      doc.text('Contribution Summary', leftX, leftY);
+      leftY += 20;
+
+      doc.fontSize(10).font('Helvetica').fillColor('#000000');
+      const labelSpacing = 10;
+
+      const writeLabelValue = (label, value) => {
+        doc.text(label, leftX, leftY);
+        const labelWidth = doc.widthOfString(label);
+        doc.text(value, leftX + labelWidth + labelSpacing, leftY);
+        leftY += 15;
+      };
+
+      writeLabelValue('Type:', typeName);
+      writeLabelValue('Amount:', `GHS ${receiptData.amount.toFixed(2)}`);
+      writeLabelValue('Recorded by:', receiptData.recordedBy || '-');
+
+      if (receiptData.remarks) {
+        doc.text('Remarks:', leftX, leftY);
+        leftY += 12;
+        doc.fontSize(9).fillColor('#555555');
+        doc.text(receiptData.remarks, leftX, leftY, {
+          width: cardWidth - (padding * 2),
+          lineGap: 2
+        });
+      }
+
+      // Right card: Payer information
+      drawRoundedCard(doc, rightCardX, cardsStartY, cardWidth, cardHeight, radius, '#F9FAFB');
+
+      let rightY = cardsStartY + padding;
+      const rightInnerX = rightCardX + padding;
+
+      doc.fontSize(12).font('Helvetica-Bold').fillColor('#333333');
+      doc.text('Payer details', rightInnerX, rightY);
+      rightY += 20;
+
+      doc.fontSize(10).font('Helvetica').fillColor('#000000');
+
+      const payerName = receiptData.memberName || 'Not linked to a member';
+      doc.text(`Name: ${payerName}`, rightInnerX, rightY);
+      rightY += 15;
+
+      if (receiptData.memberId) {
+        doc.text(`Member ID: ${receiptData.memberId}`, rightInnerX, rightY);
+        rightY += 15;
+      }
+
+      doc.text(`Receipt type: ${receiptData.receiptType || 'contribution'}`, rightInnerX, rightY);
+
+      currentY = cardsStartY + cardHeight + 40;
+
+      // Prominent amount confirmation
+      currentY = createPaymentConfirmation(doc, {
+        amount: receiptData.amount,
+        paymentDate: receiptData.paymentDate
+      }, currentY, pageWidth, margin, primaryColor);
+
+      // FOOTER - same style as dues receipt
+      const footerY = pageHeight - margin - 50;
+      currentY = footerY;
+
+      doc.fontSize(9).fillColor('#999999');
+      const fontSize = 9;
+      const beforeDues = 'Powered by ';
+      const duesAccountantText = 'DUES ACCOUNTANT';
+      const beforeWinsward = ', a product of ';
+      const winswardTechText = 'WINSWARD TECH';
+
+      const beforeDuesWidth = doc.widthOfString(beforeDues, { fontSize });
+      const duesAccountantWidth = doc.widthOfString(duesAccountantText, { fontSize });
+      const beforeWinswardWidth = doc.widthOfString(beforeWinsward, { fontSize });
+      const winswardTechWidth = doc.widthOfString(winswardTechText, { fontSize });
+
+      const totalWidth = beforeDuesWidth + duesAccountantWidth + beforeWinswardWidth + winswardTechWidth;
+      const startX = (pageWidth - totalWidth) / 2;
+      let currentX = startX;
+
+      doc.fillColor('#999999').text(beforeDues, currentX, currentY, { fontSize });
+      currentX += beforeDuesWidth;
+
+      doc.fillColor(secondaryColor).text(duesAccountantText, currentX, currentY, {
+        fontSize,
+        link: 'https://duesaccountantant.winswardtech.com',
+        underline: true
+      });
+      doc.link(currentX, currentY - fontSize * 0.8, duesAccountantWidth, fontSize * 1.2, 'https://duesaccountantant.winswardtech.com');
+      currentX += duesAccountantWidth;
+
+      doc.fillColor('#999999').text(beforeWinsward, currentX, currentY, { fontSize });
+      currentX += beforeWinswardWidth;
+
+      doc.fillColor(secondaryColor).text(winswardTechText, currentX, currentY, {
+        fontSize,
+        link: 'https://winswardtech.com',
+        underline: true
+      });
+      doc.link(currentX, currentY - fontSize * 0.8, winswardTechWidth, fontSize * 1.2, 'https://winswardtech.com');
+
+      doc.end();
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
 export const generateReceiptPDFFromReceipt = (receiptData, memberData, tenantData = null, allReceipts = []) => {
+  if (receiptData.receiptType === 'contribution' || !memberData) {
+    return generateContributionReceiptPDF(receiptData, tenantData);
+  }
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ 
@@ -504,10 +697,10 @@ export const generateReceiptPDFFromReceipt = (receiptData, memberData, tenantDat
       // DUES ACCOUNTANT with link
       doc.fillColor(secondaryColor).text(duesAccountantText, currentX, currentY, { 
         fontSize,
-        link: 'https://duesaccountant.com',
+        link: 'https://duesaccountantant.winswardtech.com',
         underline: true
       });
-      doc.link(currentX, currentY - fontSize * 0.8, duesAccountantWidth, fontSize * 1.2, 'https://duesaccountant.com');
+      doc.link(currentX, currentY - fontSize * 0.8, duesAccountantWidth, fontSize * 1.2, 'https://duesaccountantant.winswardtech.com');
       currentX += duesAccountantWidth;
       
       doc.fillColor('#999999').text(beforeWinsward, currentX, currentY, { fontSize });
