@@ -3,16 +3,18 @@ import { getTenantModels } from '../utils/tenantModels.js';
 
 const buildSubgroupStats = (subgroups, memberStatsMap) => {
   return subgroups.map((subgroup) => {
-    const stats = memberStatsMap.get(subgroup._id.toString()) || {
+    const id = subgroup._id ?? subgroup.id;
+    const stats = memberStatsMap.get(id?.toString?.() ?? String(id)) || {
       totalCollected: 0,
       memberCount: 0
     };
 
     const totalCollected = stats.totalCollected;
     const memberCount = stats.memberCount;
+    const obj = subgroup && typeof subgroup.toObject === 'function' ? subgroup.toObject() : subgroup;
 
     return {
-      ...subgroup.toObject(),
+      ...obj,
       totalCollected,
       memberCount,
       averagePerMember: memberCount > 0 ? totalCollected / memberCount : 0

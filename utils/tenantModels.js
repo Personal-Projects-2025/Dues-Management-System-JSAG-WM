@@ -1,8 +1,9 @@
 /**
  * Tenant Models Utility
- * Provides tenant-scoped model instances using the connection from request context
+ * Provides tenant-scoped model instances (Supabase or Mongoose) from request context
  */
 
+import { useSupabase } from '../config/supabase.js';
 import {
   memberSchema,
   subgroupSchema,
@@ -14,13 +15,22 @@ import {
   contributionSchema
 } from '../models/schemas.js';
 import { getTenantModel } from './modelFactory.js';
+import { getTenantModels as getSupabaseTenantModels } from '../db/tenantDb.js';
 
 /**
  * Get all tenant-scoped models from request context
- * @param {Object} req - Express request object with tenantConnection
- * @returns {Object} - Object containing all tenant models
+ * Uses Supabase when USE_SUPABASE=true, otherwise Mongoose tenant connection.
+ * @param {Object} req - Express request object (tenantConnection for Mongo, tenantId for Supabase)
+ * @returns {Object} - Tenant-scoped models
  */
 export const getTenantModels = (req) => {
+  if (useSupabase()) {
+    if (!req.tenantId) {
+      throw new Error('Tenant context (tenantId) not found. Ensure tenantMiddleware is applied.');
+    }
+    return getSupabaseTenantModels(req);
+  }
+
   if (!req.tenantConnection) {
     throw new Error('Tenant connection not found in request context. Ensure tenantMiddleware is applied.');
   }

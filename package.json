@@ -10,12 +10,14 @@
     "create-super": "node scripts/createSuperUser.js",
     "create-system": "node scripts/createSystemUser.js",
     "assign-demo-tenant": "node scripts/assignUsersToDemoTenant.js",
-    "migrate-demo": "node scripts/migrateToTenant.js"
+    "migrate-demo": "node scripts/migrateToTenant.js",
+    "migrate-mongo-to-supabase": "node scripts/migrateMongoToSupabase.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@supabase/supabase-js": "^2.95.3",
     "bcrypt": "^5.1.1",
     "compression": "^1.8.1",
     "cors": "^2.8.5",

@@ -34,6 +34,71 @@ export const exportMembersToExcel = async (members) => {
   return buffer;
 };
 
+const MAX_BULK_ROWS = 500;
+
+/**
+ * Parse an Excel buffer for bulk member upload.
+ * First row = headers (case-insensitive: Name, Email, Phone, Subgroup). Rows 2+ = data.
+ * Returns { members, errors: [] }. Skips rows with empty name. Max MAX_BULK_ROWS rows.
+ */
+export const parseBulkMembersExcel = async (buffer) => {
+  const errors = [];
+  const members = [];
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+  const sheet = workbook.worksheets[0];
+  if (!sheet || sheet.rowCount < 2) {
+    return { members: [], errors: [{ message: 'Excel must have a header row and at least one data row' }] };
+  }
+  const headerRow = sheet.getRow(1);
+  const colIndex = {};
+  for (let c = 1; c <= headerRow.cellCount; c++) {
+    const val = (headerRow.getCell(c).value ?? '').toString().trim().toLowerCase();
+    if (val === 'name') colIndex.name = c;
+    else if (val === 'email') colIndex.email = c;
+    else if (val === 'phone') colIndex.phone = c;
+    else if (val === 'subgroup') colIndex.subgroup = c;
+  }
+  if (!colIndex.name) {
+    return { members: [], errors: [{ message: 'Excel must have a "Name" column in the first row' }] };
+  }
+  const dataRowCount = sheet.rowCount - 1;
+  if (dataRowCount > MAX_BULK_ROWS) {
+    return {
+      members: [],
+      errors: [{ message: `Maximum ${MAX_BULK_ROWS} rows allowed. File has ${dataRowCount} data rows.` }]
+    };
+  }
+  for (let r = 2; r <= sheet.rowCount; r++) {
+    const row = sheet.getRow(r);
+    const name = (row.getCell(colIndex.name).value ?? '').toString().trim();
+    if (!name) continue;
+    const email = colIndex.email ? (row.getCell(colIndex.email).value ?? '').toString().trim() : '';
+    const contact = colIndex.phone ? (row.getCell(colIndex.phone).value ?? '').toString().trim() : '';
+    const subgroup = colIndex.subgroup ? (row.getCell(colIndex.subgroup).value ?? '').toString().trim() : '';
+    members.push({ name, email, contact, subgroup });
+  }
+  return { members, errors };
+};
+
+/**
+ * Generate bulk upload template: one sheet with headers Name, Email, Phone, Subgroup and example rows.
+ */
+export const generateBulkMembersTemplate = async () => {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Members');
+  sheet.columns = [
+    { header: 'Name', key: 'name', width: 30 },
+    { header: 'Email', key: 'email', width: 35 },
+    { header: 'Phone', key: 'phone', width: 20 },
+    { header: 'Subgroup', key: 'subgroup', width: 20 }
+  ];
+  sheet.addRow({ name: 'John Doe', email: 'john@example.com', phone: '0244123456', subgroup: 'Group A' });
+  sheet.addRow({ name: 'Jane Smith', email: 'jane@example.com', phone: '0555123456', subgroup: 'Group B' });
+  const buffer = await workbook.xlsx.writeBuffer();
+  return buffer;
+};
+
 export const exportPaymentsToExcel = async (payments) => {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Payments');

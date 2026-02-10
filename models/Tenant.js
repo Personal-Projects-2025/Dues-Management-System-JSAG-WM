@@ -143,8 +143,11 @@ const initializeTenantModel = async () => {
   return TenantModel;
 };
 
-// Get Tenant model (async)
+// Get Tenant model (async) - returns Supabase facade when USE_SUPABASE, else Mongoose model
 export const getTenantModel = async () => {
+  const { useSupabase } = await import('../config/supabase.js');
+  const { getTenantModelSupabase } = await import('../db/masterDb.js');
+  if (useSupabase()) return getTenantModelSupabase();
   return await initializeTenantModel();
 };
 

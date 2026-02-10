@@ -3,6 +3,8 @@ import {
   getAllMembers,
   getMemberById,
   createMember,
+  createBulkMembers,
+  getBulkMembersTemplate,
   updateMember,
   deleteMember,
   getMembersInArrears
@@ -22,6 +24,8 @@ router.use(requireAdmin);
 
 router.get('/', validatePagination, getAllMembers);
 router.get('/arrears', getMembersInArrears);
+router.get('/bulk-template', getBulkMembersTemplate);
+router.post('/bulk', createBulkMembers);
 router.get('/:id', validateMongoId, getMemberById);
 router.post('/', ...validateMember, createMember);
 router.put('/:id', validateMongoId, ...validateMember, updateMember);

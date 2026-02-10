@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import connectDB, { connectMasterDB } from './config/db.js';
+import { useSupabase, getSupabase } from './config/supabase.js';
 
 // Routes
 import authRoutes from './routes/authRoutes.js';
@@ -27,8 +28,10 @@ import { migrateToDemoTenant } from './scripts/migrateToTenant.js';
 
 dotenv.config();
 
-// Validate required environment variables
-const requiredEnvVars = ['JWT_SECRET', 'MONGODB_URI'];
+// Validate required environment variables (Supabase vs MongoDB)
+const requiredEnvVars = useSupabase()
+  ? ['JWT_SECRET', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']
+  : ['JWT_SECRET', 'MONGODB_URI'];
 const missingEnvVars = requiredEnvVars.filter((varName) => !process.env[varName]);
 if (missingEnvVars.length > 0) {
   console.error(`Missing required environment variables: ${missingEnvVars.join(', ')}`);
@@ -107,16 +110,23 @@ app.use('/api/', generalLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 
-// Connect to Master MongoDB (for tenant metadata and users)
+// Connect to database (Supabase or Master MongoDB)
 const initializeServer = async () => {
   try {
-    await connectMasterDB();
-    if (NODE_ENV === 'development') {
-      console.log('Master database connected');
+    if (useSupabase()) {
+      getSupabase();
+      if (NODE_ENV === 'development') {
+        console.log('Supabase connected');
+      }
+    } else {
+      await connectMasterDB();
+      if (NODE_ENV === 'development') {
+        console.log('Master database connected');
+      }
     }
 
-    // Auto-migrate existing data to demo tenant on first startup
-    if (process.env.AUTO_MIGRATE === 'true') {
+    // Auto-migrate existing data to demo tenant on first startup (MongoDB only)
+    if (!useSupabase() && process.env.AUTO_MIGRATE === 'true') {
       try {
         await migrateToDemoTenant();
         // Also assign all existing users to demo tenant
@@ -197,12 +207,14 @@ app.use((err, req, res, next) => {
   res.status(statusCode).json(errorResponse);
 });
 
-// Legacy connectDB for backward compatibility (runs in parallel)
-connectDB().catch((error) => {
-  if (NODE_ENV === 'development') {
-    console.error('Legacy DB connection error:', error);
-  }
-});
+// Legacy connectDB only when using MongoDB (skip when Supabase-only)
+if (!useSupabase()) {
+  connectDB().catch((error) => {
+    if (NODE_ENV === 'development') {
+      console.error('Legacy DB connection error:', error);
+    }
+  });
+}
 
 // Initialize server
 initializeServer();

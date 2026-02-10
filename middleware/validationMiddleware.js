@@ -290,12 +290,21 @@ export const validateSubgroup = [
   handleValidationErrors,
 ];
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const MONGO_ID_REGEX = /^[a-f0-9]{24}$/i;
+
+/** Accept MongoDB ObjectId or UUID (for Supabase). */
+function isValidId(value) {
+  if (!value || typeof value !== 'string') return false;
+  return MONGO_ID_REGEX.test(value) || UUID_REGEX.test(value);
+}
+
 /**
- * Validation rules for MongoDB ID parameters
+ * Validation rules for MongoDB ID parameters (also accepts UUID when using Supabase)
  */
 export const validateMongoId = [
   param('id')
-    .isMongoId()
+    .custom((value) => isValidId(value))
     .withMessage('Invalid ID format'),
   handleValidationErrors,
 ];

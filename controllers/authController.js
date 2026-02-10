@@ -2,6 +2,8 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { getUserModel } from '../models/User.js';
 import { getTenantModel } from '../models/Tenant.js';
+import { useSupabase } from '../config/supabase.js';
+import * as masterDb from '../db/masterDb.js';
 
 export const login = async (req, res) => {
   try {
@@ -12,79 +14,87 @@ export const login = async (req, res) => {
       return res.status(400).json({ error: 'Username/Email and password are required' });
     }
 
-    const User = await getUserModel();
-    
-    // Determine if input is email or username
-    const isEmail = loginIdentifier.includes('@');
     let user;
-    
+    if (useSupabase()) {
+      const isEmail = loginIdentifier.includes('@');
+      user = isEmail
+        ? await masterDb.getUserByEmail(loginIdentifier)
+        : await masterDb.getUserByUsername(loginIdentifier);
+      if (!user) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+      if (!isPasswordValid) return res.status(401).json({ error: 'Invalid credentials' });
+      await masterDb.updateUser(user.id, { lastLogin: new Date() });
+      let tenant = null;
+      if (user.tenantId) {
+        tenant = await masterDb.getTenantById(user.tenantId);
+        if (!tenant || tenant.deletedAt) {
+          return res.status(403).json({ error: 'Your account is associated with an inactive tenant' });
+        }
+        if (tenant.status === 'rejected') {
+          return res.status(403).json({ error: 'Your organization registration has been rejected', rejectionReason: tenant.rejectionReason || 'No reason provided' });
+        }
+        if (tenant.status !== 'pending' && tenant.status !== 'active') {
+          return res.status(403).json({ error: 'Your account is associated with an inactive tenant', status: tenant.status });
+        }
+      }
+      const tokenPayload = {
+        userId: user.id,
+        username: user.username,
+        role: user.role,
+        tenantId: user.role === 'system' ? null : (user.tenantId || null)
+      };
+      const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '7d' });
+      return res.json({
+        token,
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email || null,
+          role: user.role,
+          tenantId: user.role === 'system' ? null : (user.tenantId || null)
+        },
+        tenant: user.role === 'system' ? null : (tenant ? { id: tenant.id, name: tenant.name, slug: tenant.slug, status: tenant.status } : null),
+        isSystemUser: user.role === 'system'
+      });
+    }
+
+    const User = await getUserModel();
+    const isEmail = loginIdentifier.includes('@');
     if (isEmail) {
-      // Try to find by email
       user = await User.findOne({ email: loginIdentifier.toLowerCase() });
     } else {
-      // Find by username
       user = await User.findOne({ username: loginIdentifier });
     }
-    
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const isPasswordValid = await user.comparePassword(password);
-    if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    // Update last login
+    if (!isPasswordValid) return res.status(401).json({ error: 'Invalid credentials' });
     user.lastLogin = new Date();
     await user.save();
 
-    // Get tenant information if user has a tenant
     let tenant = null;
     if (user.tenantId) {
       const Tenant = await getTenantModel();
       tenant = await Tenant.findById(user.tenantId);
-      
-      // Handle different tenant statuses
       if (!tenant || tenant.deletedAt) {
-        return res.status(403).json({ 
-          error: 'Your account is associated with an inactive tenant' 
-        });
+        return res.status(403).json({ error: 'Your account is associated with an inactive tenant' });
       }
-      
       if (tenant.status === 'rejected') {
-        return res.status(403).json({ 
-          error: 'Your organization registration has been rejected',
-          rejectionReason: tenant.rejectionReason || 'No reason provided'
-        });
+        return res.status(403).json({ error: 'Your organization registration has been rejected', rejectionReason: tenant.rejectionReason || 'No reason provided' });
       }
-      
-      if (tenant.status === 'pending') {
-        // Allow login for pending tenants (they have read-only access)
-        // Status will be checked in tenantMiddleware
-      } else if (tenant.status !== 'active') {
-        return res.status(403).json({ 
-          error: 'Your account is associated with an inactive tenant',
-          status: tenant.status
-        });
+      if (tenant.status !== 'pending' && tenant.status !== 'active') {
+        return res.status(403).json({ error: 'Your account is associated with an inactive tenant', status: tenant.status });
       }
     }
 
-    // Create JWT with tenant ID
-    // System Users don't have tenantId (they're above all tenants)
     const tokenPayload = {
       userId: user._id,
       username: user.username,
       role: user.role,
       tenantId: user.role === 'system' ? null : (user.tenantId || null)
     };
-
-    const token = jwt.sign(
-      tokenPayload,
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '7d' });
     res.json({
       token,
       user: {
@@ -94,12 +104,7 @@ export const login = async (req, res) => {
         role: user.role,
         tenantId: user.role === 'system' ? null : (user.tenantId || null)
       },
-      tenant: user.role === 'system' ? null : (tenant ? {
-        id: tenant._id,
-        name: tenant.name,
-        slug: tenant.slug,
-        status: tenant.status
-      } : null),
+      tenant: user.role === 'system' ? null : (tenant ? { id: tenant._id, name: tenant.name, slug: tenant.slug, status: tenant.status } : null),
       isSystemUser: user.role === 'system'
     });
   } catch (error) {
@@ -153,10 +158,17 @@ export const register = async (req, res) => {
       // If still no tenantId, we need to fetch it from the database
       if (!finalTenantId) {
         try {
-          const User = await getUserModel();
-          const requesterUser = await User.findById(req.user.userId);
-          if (requesterUser && requesterUser.tenantId) {
-            finalTenantId = requesterUser.tenantId.toString();
+          if (useSupabase()) {
+            const requesterUser = await masterDb.getUserById(req.user.userId);
+            if (requesterUser && requesterUser.tenantId) {
+              finalTenantId = typeof requesterUser.tenantId === 'string' ? requesterUser.tenantId : requesterUser.tenantId?.toString?.();
+            }
+          } else {
+            const User = await getUserModel();
+            const requesterUser = await User.findById(req.user.userId);
+            if (requesterUser && requesterUser.tenantId) {
+              finalTenantId = requesterUser.tenantId.toString();
+            }
           }
         } catch (dbError) {
           console.error('Error fetching requester tenantId:', dbError);
@@ -323,20 +335,58 @@ export const register = async (req, res) => {
 
 export const getCurrentUser = async (req, res) => {
   try {
+    const userId = req.user.userId;
+
+    if (useSupabase()) {
+      const user = await masterDb.getUserById(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      let tenant = null;
+      if (user.tenantId) {
+        tenant = await masterDb.getTenantById(user.tenantId);
+      }
+
+      if (!user.tenantId && user.role !== 'system') {
+        const demoTenantName = process.env.DEFAULT_TENANT_NAME || 'demo';
+        const demoTenant = await masterDb.getTenantBySlug(demoTenantName);
+        if (demoTenant) {
+          await masterDb.updateUser(user.id, { tenantId: demoTenant.id });
+          tenant = await masterDb.getTenantById(demoTenant.id);
+        }
+      }
+
+      const tenantIdOut = user.role === 'system' ? null : (user.tenantId || null);
+      return res.json({
+        id: user.id || user._id,
+        username: user.username,
+        email: user.email || null,
+        role: user.role,
+        tenantId: tenantIdOut,
+        lastLogin: user.lastLogin,
+        tenant: user.role === 'system' ? null : (tenant ? {
+          id: tenant.id || tenant._id,
+          name: tenant.name,
+          slug: tenant.slug,
+          status: tenant.status
+        } : null),
+        isSystemUser: user.role === 'system'
+      });
+    }
+
     const User = await getUserModel();
-    const user = await User.findById(req.user.userId).select('-passwordHash');
+    const user = await User.findById(userId).select('-passwordHash');
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Get tenant info if user has a tenant
     let tenant = null;
     if (user.tenantId) {
       const Tenant = await getTenantModel();
       tenant = await Tenant.findById(user.tenantId).select('name slug status');
     }
 
-    // If user doesn't have tenantId but is not a system user, try to assign to demo tenant
     if (!user.tenantId && user.role !== 'system') {
       const Tenant = await getTenantModel();
       const demoTenantName = process.env.DEFAULT_TENANT_NAME || 'demo';
@@ -379,14 +429,57 @@ export const getCurrentUser = async (req, res) => {
  */
 export const refreshToken = async (req, res) => {
   try {
+    const userId = req.user.userId;
+
+    if (useSupabase()) {
+      const user = await masterDb.getUserById(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      let tenant = null;
+      if (user.tenantId && user.role !== 'system') {
+        tenant = await masterDb.getTenantById(user.tenantId);
+        if (!tenant || tenant.deletedAt) {
+          return res.status(403).json({ error: 'Your account is associated with an inactive tenant' });
+        }
+        if (tenant.status === 'rejected') {
+          return res.status(403).json({
+            error: 'Your organization registration has been rejected',
+            rejectionReason: tenant.rejectionReason || 'No reason provided'
+          });
+        }
+        if (tenant.status !== 'active' && tenant.status !== 'pending') {
+          return res.status(403).json({ error: 'Your account is associated with an inactive tenant', status: tenant.status });
+        }
+      }
+      const tokenPayload = {
+        userId: user.id || user._id,
+        username: user.username,
+        role: user.role,
+        tenantId: user.role === 'system' ? null : (user.tenantId || null)
+      };
+      const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '7d' });
+      return res.json({
+        token,
+        user: {
+          id: user.id || user._id,
+          username: user.username,
+          email: user.email || null,
+          role: user.role,
+          tenantId: user.role === 'system' ? null : (user.tenantId || null)
+        },
+        tenant: user.role === 'system' ? null : (tenant ? { id: tenant.id || tenant._id, name: tenant.name, slug: tenant.slug, status: tenant.status } : null),
+        isSystemUser: user.role === 'system'
+      });
+    }
+
     const User = await getUserModel();
-    const user = await User.findById(req.user.userId);
+    const user = await User.findById(userId);
     
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Get tenant information
     let tenant = null;
     if (user.tenantId && user.role !== 'system') {
       const Tenant = await getTenantModel();
@@ -413,7 +506,6 @@ export const refreshToken = async (req, res) => {
       }
     }
 
-    // Create new JWT with updated tenant ID
     const tokenPayload = {
       userId: user._id,
       username: user.username,

@@ -1,5 +1,7 @@
 import { getTenantConnection } from '../utils/connectionManager.js';
 import { getTenantModel } from '../models/Tenant.js';
+import { useSupabase } from '../config/supabase.js';
+import * as masterDb from '../db/masterDb.js';
 
 /**
  * Middleware to extract tenant ID from JWT and set tenant context
@@ -18,6 +20,64 @@ export const setTenantContext = async (req, res, next) => {
       return next();
     }
 
+    // ---------- Supabase path ----------
+    if (useSupabase()) {
+      if (!tenantId && req.user?.userId) {
+        const user = await masterDb.getUserById(req.user.userId);
+        if (!user) {
+          console.error('User not found in database:', req.user.userId);
+          return res.status(404).json({ error: 'User not found' });
+        }
+        tenantId = user.tenantId || null;
+        if (!tenantId) {
+          const demoTenantName = process.env.DEFAULT_TENANT_NAME || 'demo';
+          let demoTenant = await masterDb.getTenantBySlug(demoTenantName);
+          if (!demoTenant) {
+            demoTenant = await masterDb.createTenant({
+              name: 'Demo Organization',
+              slug: demoTenantName,
+              status: 'active',
+              config: {
+                branding: {
+                  name: 'Demo Organization',
+                  primaryColor: '#3B82F6',
+                  secondaryColor: '#1E40AF'
+                }
+              }
+            });
+            console.log('Demo tenant created:', demoTenant.id);
+          }
+          await masterDb.updateUser(user.id, { tenantId: demoTenant.id });
+          tenantId = demoTenant.id;
+          console.log(`User ${user.username} assigned to demo tenant: ${tenantId}`);
+        }
+      }
+      if (!tenantId) {
+        return res.status(400).json({
+          error: 'Tenant ID is required. Please log out and log back in to refresh your session.'
+        });
+      }
+      const tenant = await masterDb.getTenantById(tenantId);
+      if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+      if (tenant.status === 'rejected') {
+        return res.status(403).json({
+          error: 'Your organization registration has been rejected',
+          status: tenant.status,
+          rejectionReason: tenant.rejectionReason || 'No reason provided'
+        });
+      }
+      if (tenant.status === 'pending') req.isPendingTenant = true;
+      if (tenant.status !== 'active' && tenant.status !== 'pending') {
+        return res.status(403).json({ error: 'Tenant is not active', status: tenant.status });
+      }
+      if (tenant.deletedAt) return res.status(403).json({ error: 'Tenant has been deleted' });
+      req.tenant = tenant;
+      req.tenantId = tenant.id;
+      req.tenantConnection = { _supabase: true };
+      return next();
+    }
+
+    // ---------- MongoDB path ----------
     // Get Tenant model
     const Tenant = await getTenantModel();
 
@@ -226,7 +286,8 @@ export const setTenantContext = async (req, res, next) => {
  * Middleware to require tenant context (for routes that need tenant data)
  */
 export const requireTenant = (req, res, next) => {
-  if (!req.tenant || !req.tenantConnection) {
+  const hasConnection = req.tenantConnection && (req.tenantConnection._supabase === true || req.tenantConnection.readyState === 1);
+  if (!req.tenant || !hasConnection) {
     return res.status(400).json({ error: 'Tenant context is required' });
   }
   next();
@@ -249,8 +310,8 @@ export const allowSuperAdmin = (req, res, next) => {
   if (req.user?.role === 'system' || req.user?.role === 'super') {
     return next();
   }
-  // For non-super users, require tenant context
-  if (!req.tenant || !req.tenantConnection) {
+  const hasConnection = req.tenantConnection && (req.tenantConnection._supabase === true || req.tenantConnection.readyState === 1);
+  if (!req.tenant || !hasConnection) {
     return res.status(400).json({ error: 'Tenant context is required' });
   }
   next();
