@@ -58,7 +58,10 @@ export const setTenantContext = async (req, res, next) => {
         });
       }
       const tenant = await masterDb.getTenantById(tenantId);
-      if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+      if (!tenant) {
+        console.warn('Tenant not found (tenant middleware)', { tenantId, userId: req.user?.userId });
+        return res.status(404).json({ error: 'Tenant not found' });
+      }
       if (tenant.status === 'rejected') {
         return res.status(403).json({
           error: 'Your organization registration has been rejected',
@@ -175,6 +178,7 @@ export const setTenantContext = async (req, res, next) => {
     const tenant = await Tenant.findById(tenantId);
 
     if (!tenant) {
+      console.warn('Tenant not found (tenant middleware)', { tenantId, userId: req.user?.userId });
       return res.status(404).json({ error: 'Tenant not found' });
     }
 

@@ -43,6 +43,15 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
+// Behind reverse proxy / load balancer: use X-Forwarded-* for client IP (rate limiting, logs).
+// Set TRUST_PROXY=1 (or true) in production when the API is proxied. Omit or false for local dev.
+const trustProxyEnv = process.env.TRUST_PROXY;
+if (trustProxyEnv === 'true' || trustProxyEnv === '1') {
+  app.set('trust proxy', 1);
+} else if (trustProxyEnv && !Number.isNaN(Number(trustProxyEnv))) {
+  app.set('trust proxy', Number(trustProxyEnv));
+}
+
 // Security Headers with Helmet
 app.use(helmet({
   contentSecurityPolicy: {
@@ -88,25 +97,36 @@ app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Rate limiting
+// Health check before /api rate limiter (load balancers & probes should not consume quota)
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'OK', message: 'Server is running' });
+});
+
+// Rate limiting (env-tunable; defaults are friendlier to SPAs and shared office IPs)
+const rateWindowMs = Math.max(60_000, parseInt(process.env.RATE_LIMIT_WINDOW_MS || '', 10) || 15 * 60 * 1000);
+const rateMax = Math.max(1, parseInt(process.env.RATE_LIMIT_MAX || '', 10) || 600);
+const authRateMax = Math.max(
+  1,
+  parseInt(process.env.AUTH_RATE_LIMIT_MAX || '', 10) || (NODE_ENV === 'production' ? 25 : 50)
+);
+
 const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.',
+  windowMs: rateWindowMs,
+  max: rateMax,
+  message: { error: 'Too many requests from this IP, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: NODE_ENV === 'production' ? 10 : 50, // More lenient in development, stricter in production
-  message: 'Too many login attempts, please try again later.',
+  windowMs: rateWindowMs,
+  max: authRateMax,
+  message: { error: 'Too many login attempts, please try again later.' },
   skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// Apply rate limiting
 app.use('/api/', generalLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
@@ -175,11 +195,6 @@ const initializeServer = async () => {
     process.exit(1);
   }
 };
-
-// Health check (before routes)
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Server is running' });
-});
 
 // Error handling middleware
 app.use((err, req, res, next) => {
