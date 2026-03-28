@@ -24,6 +24,7 @@ import tenantSetupRoutes from './routes/tenantSetupRoutes.js';
 import tenantApprovalRoutes from './routes/tenantApprovalRoutes.js';
 import systemRoutes from './routes/systemRoutes.js';
 import { initReminderScheduler } from './jobs/reminderScheduler.js';
+import { initMirrorAndJoinDateCrons } from './jobs/scheduledMirrorAndJoinDate.js';
 import { migrateToDemoTenant } from './scripts/migrateToTenant.js';
 
 dotenv.config();
@@ -158,6 +159,7 @@ const initializeServer = async () => {
 
     // Initialize reminder scheduler
     initReminderScheduler();
+    initMirrorAndJoinDateCrons();
 
     // Start server
     app.listen(PORT, () => {

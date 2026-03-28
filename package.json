@@ -11,7 +11,11 @@
     "create-system": "node scripts/createSystemUser.js",
     "assign-demo-tenant": "node scripts/assignUsersToDemoTenant.js",
     "migrate-demo": "node scripts/migrateToTenant.js",
-    "migrate-mongo-to-supabase": "node scripts/migrateMongoToSupabase.js"
+    "migrate-mongo-to-supabase": "node scripts/migrateMongoToSupabase.js",
+    "set-join-dates-jan2026": "node scripts/setMembersJoinDateToJan2026.js",
+    "join-date-maintenance": "node scripts/runJoinDateMaintenanceOnce.js",
+    "mirror-mongo-supabase-once": "node scripts/runMirrorOnce.js",
+    "set-join-dates-jan2026-mongo": "node scripts/runJoinDateMaintenanceOnce.js"
   },
   "keywords": [],
   "author": "",
@@ -32,6 +36,7 @@
     "node-cron": "^3.0.3",
     "nodemailer": "^7.0.12",
     "pdfkit": "^0.14.0",
-    "sib-api-v3-sdk": "^8.5.0"
+    "sib-api-v3-sdk": "^8.5.0",
+    "uuid": "^13.0.0"
   }
 }

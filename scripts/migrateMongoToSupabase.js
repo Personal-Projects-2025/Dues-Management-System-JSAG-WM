@@ -12,22 +12,41 @@
  */
 
 import { randomUUID } from 'crypto';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import dotenv from 'dotenv';
 import { connectMasterDB } from '../config/db.js';
 import { getTenantConnection } from '../utils/connectionManager.js';
 import { createClient } from '@supabase/supabase-js';
 
-dotenv.config();
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: join(__dirname, '..', '.env') });
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env');
+  console.error('Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in backend/.env');
   process.exit(1);
 }
 if (SUPABASE_URL.includes('.supabase.com')) {
   console.error('SUPABASE_URL must use .supabase.co (not .com). Fix it in .env and try again.');
+  process.exit(1);
+}
+
+if (!process.env.MONGODB_URI && !process.env.MASTER_DB_URI) {
+  console.error('');
+  console.error('MongoDB is required for this migration. Add one of these to backend/.env:');
+  console.error('');
+  console.error('  MONGODB_URI=mongodb://localhost:27017');
+  console.error('  MASTER_DB_NAME=dues-accountant-master');
+  console.error('');
+  console.error('  OR a full URI:');
+  console.error('  MASTER_DB_URI=mongodb://user:pass@host:27017/dues-accountant-master');
+  console.error('');
+  console.error('See backend/.env.example for more options. Ensure MongoDB is running.');
+  console.error('If you only need to set members\' join dates in Supabase, run: npm run set-join-dates-jan2026');
+  console.error('');
   process.exit(1);
 }
 
