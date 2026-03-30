@@ -341,7 +341,7 @@ export const contributionSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Budget Line Schema (embedded in Budget)
+// Budget Line Schema (embedded in Budget — category-based Phase 1)
 export const budgetLineSchema = new mongoose.Schema({
   category: {
     type: String,
@@ -349,6 +349,34 @@ export const budgetLineSchema = new mongoose.Schema({
     trim: true
   },
   plannedAmount: {
+    type: Number,
+    required: true,
+    min: 0
+  }
+}, { _id: false });
+
+// Budget Fund Line Schema (embedded in Budget — fund/contribution-type-based Phase 2)
+export const budgetFundLineSchema = new mongoose.Schema({
+  contributionTypeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ContributionType',
+    required: true
+  },
+  plannedAmount: {
+    type: Number,
+    required: true,
+    min: 0
+  }
+}, { _id: false });
+
+// Budget Revenue Line Schema (embedded in Budget — income targets Phase 3)
+export const budgetRevenueLineSchema = new mongoose.Schema({
+  contributionTypeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ContributionType',
+    required: true
+  },
+  targetAmount: {
     type: Number,
     required: true,
     min: 0
@@ -369,7 +397,9 @@ export const budgetSchema = new mongoose.Schema({
     type: Date,
     required: true
   },
-  lines: [budgetLineSchema]
+  lines: [budgetLineSchema],
+  fundLines: [budgetFundLineSchema],
+  revenueLines: [budgetRevenueLineSchema]
 }, {
   timestamps: true
 });

@@ -339,6 +339,30 @@ export const validateBudget = [
     .if(body('lines').exists())
     .isFloat({ min: 0 })
     .withMessage('Each line plannedAmount must be a non-negative number'),
+  body('fundLines')
+    .optional()
+    .isArray()
+    .withMessage('fundLines must be an array'),
+  body('fundLines.*.contributionTypeId')
+    .if(body('fundLines').isArray())
+    .notEmpty()
+    .withMessage('Each fund line must have a contributionTypeId'),
+  body('fundLines.*.plannedAmount')
+    .if(body('fundLines').isArray())
+    .isFloat({ min: 0 })
+    .withMessage('Each fund line plannedAmount must be a non-negative number'),
+  body('revenueLines')
+    .optional()
+    .isArray()
+    .withMessage('revenueLines must be an array'),
+  body('revenueLines.*.contributionTypeId')
+    .if(body('revenueLines').isArray())
+    .notEmpty()
+    .withMessage('Each revenue line must have a contributionTypeId'),
+  body('revenueLines.*.targetAmount')
+    .if(body('revenueLines').isArray())
+    .isFloat({ min: 0 })
+    .withMessage('Each revenue line targetAmount must be a non-negative number'),
   handleValidationErrors,
 ];
 
@@ -382,6 +406,30 @@ export const validateCreateBudget = [
     .if(body('lines').exists())
     .isFloat({ min: 0 })
     .withMessage('Each line plannedAmount must be a non-negative number'),
+  body('fundLines')
+    .optional()
+    .isArray()
+    .withMessage('fundLines must be an array'),
+  body('fundLines.*.contributionTypeId')
+    .if(body('fundLines').isArray())
+    .notEmpty()
+    .withMessage('Each fund line must have a contributionTypeId'),
+  body('fundLines.*.plannedAmount')
+    .if(body('fundLines').isArray())
+    .isFloat({ min: 0 })
+    .withMessage('Each fund line plannedAmount must be a non-negative number'),
+  body('revenueLines')
+    .optional()
+    .isArray()
+    .withMessage('revenueLines must be an array'),
+  body('revenueLines.*.contributionTypeId')
+    .if(body('revenueLines').isArray())
+    .notEmpty()
+    .withMessage('Each revenue line must have a contributionTypeId'),
+  body('revenueLines.*.targetAmount')
+    .if(body('revenueLines').isArray())
+    .isFloat({ min: 0 })
+    .withMessage('Each revenue line targetAmount must be a non-negative number'),
   handleValidationErrors,
 ];
 

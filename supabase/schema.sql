@@ -242,6 +242,34 @@ CREATE TABLE IF NOT EXISTS budget_lines (
 CREATE INDEX IF NOT EXISTS idx_budget_lines_budget ON budget_lines(budget_id);
 CREATE INDEX IF NOT EXISTS idx_budget_lines_tenant ON budget_lines(tenant_id);
 
+CREATE TABLE IF NOT EXISTS budget_fund_lines (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  budget_id UUID NOT NULL REFERENCES budgets(id) ON DELETE CASCADE,
+  contribution_type_id UUID REFERENCES contribution_types(id) ON DELETE SET NULL,
+  planned_amount NUMERIC(12,2) NOT NULL CHECK (planned_amount >= 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(budget_id, contribution_type_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_budget_fund_lines_budget ON budget_fund_lines(budget_id);
+CREATE INDEX IF NOT EXISTS idx_budget_fund_lines_tenant ON budget_fund_lines(tenant_id);
+
+CREATE TABLE IF NOT EXISTS budget_revenue_lines (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  budget_id UUID NOT NULL REFERENCES budgets(id) ON DELETE CASCADE,
+  contribution_type_id UUID REFERENCES contribution_types(id) ON DELETE SET NULL,
+  target_amount NUMERIC(12,2) NOT NULL CHECK (target_amount >= 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(budget_id, contribution_type_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_budget_revenue_lines_budget ON budget_revenue_lines(budget_id);
+CREATE INDEX IF NOT EXISTS idx_budget_revenue_lines_tenant ON budget_revenue_lines(tenant_id);
+
 -- Optional: Row Level Security (RLS) - enable if using Supabase Auth + anon key
 -- ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE users ENABLE ROW LEVEL SECURITY;

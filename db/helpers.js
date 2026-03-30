@@ -51,6 +51,48 @@ export async function aggregateExpendituresByCategory(sb, tenantId, start, end) 
 }
 
 /**
+ * Aggregate expenditure amounts grouped by funded_by_contribution_type_id for a tenant/period.
+ * Returns { [contributionTypeId | '__untagged__']: number }.
+ * Expenditures with no fund tag are stored under the key '__untagged__'.
+ */
+export async function aggregateExpendituresByFund(sb, tenantId, start, end) {
+  const { data, error } = await sb()
+    .from('expenditures')
+    .select('funded_by_contribution_type_id, amount')
+    .eq('tenant_id', tenantId)
+    .gte('date', start)
+    .lte('date', end);
+  if (error) throw error;
+  const result = {};
+  for (const row of data || []) {
+    const key = row.funded_by_contribution_type_id || '__untagged__';
+    result[key] = (result[key] || 0) + Number(row.amount || 0);
+  }
+  return result;
+}
+
+/**
+ * Aggregate contribution amounts grouped by contribution_type_id for a tenant/period.
+ * Returns { [contributionTypeId | '__untyped__']: number }.
+ * Contributions with no type (should not happen, but guarded) are stored under '__untyped__'.
+ */
+export async function aggregateContributionsByType(sb, tenantId, start, end) {
+  const { data, error } = await sb()
+    .from('contributions')
+    .select('contribution_type_id, amount')
+    .eq('tenant_id', tenantId)
+    .gte('date', start)
+    .lte('date', end);
+  if (error) throw error;
+  const result = {};
+  for (const row of data || []) {
+    const key = row.contribution_type_id || '__untyped__';
+    result[key] = (result[key] || 0) + Number(row.amount || 0);
+  }
+  return result;
+}
+
+/**
  * Calculate arrears for a member (same logic as Mongoose method).
  */
 export const calculateArrears = (member) => {

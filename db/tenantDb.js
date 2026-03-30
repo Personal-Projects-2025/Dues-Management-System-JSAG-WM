@@ -3,7 +3,7 @@
  * Replaces Mongoose tenant models with same API shape (find, findById, create, etc.).
  */
 import { getSupabase } from '../config/supabase.js';
-import { fromRow, fromRows, toRow, calculateArrears, aggregateExpendituresByCategory } from './helpers.js';
+import { fromRow, fromRows, toRow, calculateArrears, aggregateExpendituresByCategory, aggregateExpendituresByFund, aggregateContributionsByType } from './helpers.js';
 
 const sb = () => getSupabase();
 
@@ -280,7 +280,7 @@ function activityLogModel(tenantId) {
 function budgetModel(tenantId) {
   const t = tenantId;
 
-  async function attachLines(budget) {
+  async function attachCategoryLines(budget) {
     if (!budget) return null;
     const { data, error } = await sb()
       .from('budget_lines')
@@ -289,6 +289,38 @@ function budgetModel(tenantId) {
       .order('category', { ascending: true });
     if (error) throw error;
     budget.lines = fromRows(data);
+    return budget;
+  }
+
+  async function attachFundLines(budget) {
+    if (!budget) return null;
+    const { data, error } = await sb()
+      .from('budget_fund_lines')
+      .select('*')
+      .eq('budget_id', budget.id)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    budget.fundLines = fromRows(data);
+    return budget;
+  }
+
+  async function attachRevenueLines(budget) {
+    if (!budget) return null;
+    const { data, error } = await sb()
+      .from('budget_revenue_lines')
+      .select('*')
+      .eq('budget_id', budget.id)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    budget.revenueLines = fromRows(data);
+    return budget;
+  }
+
+  async function attachAll(budget) {
+    if (!budget) return null;
+    await attachCategoryLines(budget);
+    await attachFundLines(budget);
+    await attachRevenueLines(budget);
     return budget;
   }
 
@@ -301,7 +333,7 @@ function budgetModel(tenantId) {
           .eq('tenant_id', t)
           .order('period_start', { ascending: false });
         if (error) throw error;
-        return Promise.all(fromRows(data).map(attachLines));
+        return Promise.all(fromRows(data).map(attachAll));
       })();
       return chainable(promise);
     },
@@ -314,12 +346,12 @@ function budgetModel(tenantId) {
           .eq('id', id)
           .maybeSingle();
         if (error) throw error;
-        return attachLines(fromRow(data));
+        return attachAll(fromRow(data));
       })();
       return chainable(promise);
     },
     async create(fields) {
-      const { lines = [], ...meta } = fields;
+      const { lines = [], fundLines = [], revenueLines = [], ...meta } = fields;
       const row = toRow({ ...meta, tenantId: t });
       const { data, error } = await sb().from('budgets').insert(row).select('*').single();
       if (error) throw error;
@@ -331,10 +363,22 @@ function budgetModel(tenantId) {
         if (le) throw le;
       }
 
-      return attachLines(budget);
+      if (fundLines.length > 0) {
+        const fundLineRows = fundLines.map((l) => toRow({ ...l, budgetId: budget.id, tenantId: t }));
+        const { error: fle } = await sb().from('budget_fund_lines').insert(fundLineRows);
+        if (fle) throw fle;
+      }
+
+      if (revenueLines.length > 0) {
+        const revLineRows = revenueLines.map((l) => toRow({ ...l, budgetId: budget.id, tenantId: t }));
+        const { error: rle } = await sb().from('budget_revenue_lines').insert(revLineRows);
+        if (rle) throw rle;
+      }
+
+      return attachAll(budget);
     },
     async update(id, fields) {
-      const { lines, ...meta } = fields;
+      const { lines, fundLines, revenueLines, ...meta } = fields;
       const row = toRow(meta, ['tenantId']);
       row.updated_at = new Date().toISOString();
       const { data, error } = await sb()
@@ -350,7 +394,6 @@ function budgetModel(tenantId) {
       if (lines !== undefined) {
         const { error: de } = await sb().from('budget_lines').delete().eq('budget_id', id);
         if (de) throw de;
-
         if (lines.length > 0) {
           const lineRows = lines.map((l) => toRow({ ...l, budgetId: id, tenantId: t }));
           const { error: ie } = await sb().from('budget_lines').insert(lineRows);
@@ -358,7 +401,27 @@ function budgetModel(tenantId) {
         }
       }
 
-      return attachLines(budget);
+      if (fundLines !== undefined) {
+        const { error: fde } = await sb().from('budget_fund_lines').delete().eq('budget_id', id);
+        if (fde) throw fde;
+        if (fundLines.length > 0) {
+          const fundLineRows = fundLines.map((l) => toRow({ ...l, budgetId: id, tenantId: t }));
+          const { error: fie } = await sb().from('budget_fund_lines').insert(fundLineRows);
+          if (fie) throw fie;
+        }
+      }
+
+      if (revenueLines !== undefined) {
+        const { error: rde } = await sb().from('budget_revenue_lines').delete().eq('budget_id', id);
+        if (rde) throw rde;
+        if (revenueLines.length > 0) {
+          const revLineRows = revenueLines.map((l) => toRow({ ...l, budgetId: id, tenantId: t }));
+          const { error: rie } = await sb().from('budget_revenue_lines').insert(revLineRows);
+          if (rie) throw rie;
+        }
+      }
+
+      return attachAll(budget);
     },
     async findByIdAndUpdate(id, fields) {
       return this.update(id, fields);
@@ -381,6 +444,12 @@ function budgetModel(tenantId) {
     },
     async aggregateActuals(start, end) {
       return aggregateExpendituresByCategory(sb, t, start, end);
+    },
+    async aggregateActualsByFund(start, end) {
+      return aggregateExpendituresByFund(sb, t, start, end);
+    },
+    async aggregateActualRevenue(start, end) {
+      return aggregateContributionsByType(sb, t, start, end);
     }
   };
 }
