@@ -155,14 +155,18 @@ export const updateBudget = async (req, res) => {
       return res.status(409).json({ error: 'The updated period overlaps with another existing budget.' });
     }
 
-    const updated = await Budget.update(id, {
-      ...(name !== undefined && { name }),
-      ...(periodStart && { periodStart }),
-      ...(periodEnd && { periodEnd }),
-      ...(lines !== undefined && { lines }),
-      ...(fundLines !== undefined && { fundLines }),
-      ...(revenueLines !== undefined && { revenueLines })
-    });
+    const updated = await Budget.findByIdAndUpdate(
+      id,
+      {
+        ...(name !== undefined && { name }),
+        ...(periodStart && { periodStart }),
+        ...(periodEnd && { periodEnd }),
+        ...(lines !== undefined && { lines }),
+        ...(fundLines !== undefined && { fundLines }),
+        ...(revenueLines !== undefined && { revenueLines })
+      },
+      { new: true }
+    );
 
     if (req.user.role === 'admin') {
       await ActivityLog.create({
