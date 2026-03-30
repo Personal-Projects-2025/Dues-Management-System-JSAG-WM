@@ -146,6 +146,51 @@ export const renderReminderEmail = ({ member, amountOwed, monthsInArrears, verse
   `;
 };
 
+export const renderPasswordResetOtpEmail = ({ otp, username }) => `
+  <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6; max-width: 480px; margin: 0 auto;">
+    <div style="background: #2563eb; padding: 28px 32px; border-radius: 12px 12px 0 0; text-align: center;">
+      <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.3px;">
+        Dues Accountant
+      </h1>
+      <p style="color: #bfdbfe; margin: 6px 0 0; font-size: 13px;">Password Reset Request</p>
+    </div>
+    <div style="background: #ffffff; padding: 32px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+      <p style="margin: 0 0 16px; font-size: 15px;">Hello <strong>${username}</strong>,</p>
+      <p style="margin: 0 0 24px; font-size: 15px; color: #4b5563;">
+        We received a request to reset your password. Use the verification code below to proceed.
+        This code expires in <strong>15 minutes</strong>.
+      </p>
+      <div style="background: #f0f7ff; border: 2px dashed #93c5fd; border-radius: 10px; padding: 24px; text-align: center; margin: 0 0 24px;">
+        <p style="margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; font-weight: 600;">
+          Your Reset Code
+        </p>
+        <p style="margin: 0; font-size: 40px; font-weight: 800; letter-spacing: 10px; color: #1d4ed8; font-family: 'Courier New', monospace;">
+          ${otp}
+        </p>
+      </div>
+      <p style="margin: 0 0 8px; font-size: 13px; color: #6b7280;">
+        If you did not request a password reset, please ignore this email. Your account remains secure.
+      </p>
+      <p style="margin: 24px 0 0; font-size: 14px; color: #374151;">
+        Blessings,<br/>
+        <strong>Dues Accountant Team</strong>
+      </p>
+    </div>
+  </div>
+`;
+
+export const renderPasswordResetOtpText = ({ otp, username }) =>
+  `Hello ${username},
+
+We received a request to reset your password. Use the verification code below. This code expires in 15 minutes.
+
+Your Reset Code: ${otp}
+
+If you did not request a password reset, please ignore this email.
+
+Blessings,
+Dues Accountant Team`;
+
 export const renderReminderText = ({ member, amountOwed, monthsInArrears, verse, groupName }) => {
   const gName = resolveGroupName(groupName);
   return `Hello ${member.name},

@@ -274,6 +274,47 @@ export const validateRegister = [
 ];
 
 /**
+ * Validation rules for forgot-password request
+ */
+export const validateForgotPassword = [
+  body('email')
+    .trim()
+    .notEmpty()
+    .withMessage('Email is required')
+    .isEmail()
+    .withMessage('Invalid email format')
+    .normalizeEmail(),
+  handleValidationErrors,
+];
+
+/**
+ * Validation rules for password reset (OTP + new password)
+ */
+export const validateResetPassword = [
+  body('email')
+    .trim()
+    .notEmpty()
+    .withMessage('Email is required')
+    .isEmail()
+    .withMessage('Invalid email format')
+    .normalizeEmail(),
+  body('otp')
+    .trim()
+    .notEmpty()
+    .withMessage('Reset code is required')
+    .isLength({ min: 6, max: 6 })
+    .withMessage('Reset code must be 6 digits')
+    .isNumeric()
+    .withMessage('Reset code must contain only numbers'),
+  body('newPassword')
+    .notEmpty()
+    .withMessage('New password is required')
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters'),
+  handleValidationErrors,
+];
+
+/**
  * Validation rules for subgroup creation/update
  */
 export const validateSubgroup = [

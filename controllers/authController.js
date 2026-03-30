@@ -335,6 +335,97 @@ export const register = async (req, res) => {
   }
 };
 
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const genericMessage = "If that email address is registered, you'll receive a reset code shortly.";
+
+    const generateOtp = async () => {
+      const { randomInt } = await import('crypto');
+      return String(randomInt(100000, 999999));
+    };
+
+    const sendOtpEmail = async (userEmail, username, otp) => {
+      const { sendEmail } = await import('../utils/mailer.js');
+      const { renderPasswordResetOtpEmail, renderPasswordResetOtpText } = await import('../utils/emailTemplates.js');
+      await sendEmail({
+        to: userEmail,
+        subject: 'Your Password Reset Code — Dues Accountant',
+        html: renderPasswordResetOtpEmail({ otp, username }),
+        text: renderPasswordResetOtpText({ otp, username }),
+      });
+    };
+
+    if (useSupabase()) {
+      const user = await masterDb.getUserByEmail(email);
+      if (!user) return res.json({ message: genericMessage });
+      const otp = await generateOtp();
+      const otpHash = await bcrypt.hash(otp, 10);
+      await masterDb.updateUser(user.id, {
+        passwordResetToken: otpHash,
+        passwordResetExpires: new Date(Date.now() + 15 * 60 * 1000),
+      });
+      try { await sendOtpEmail(user.email, user.username, otp); } catch (e) { console.error('OTP email failed:', e); }
+      return res.json({ message: genericMessage });
+    }
+
+    const User = await getUserModel();
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) return res.json({ message: genericMessage });
+    const otp = await generateOtp();
+    user.passwordResetToken = await bcrypt.hash(otp, 10);
+    user.passwordResetExpires = new Date(Date.now() + 15 * 60 * 1000);
+    await user.save();
+    try { await sendOtpEmail(user.email, user.username, otp); } catch (e) { console.error('OTP email failed:', e); }
+    return res.json({ message: genericMessage });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: error.message || 'Request failed' });
+  }
+};
+
+export const resetPassword = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    const invalidError = { error: 'Invalid or expired reset code. Please request a new one.' };
+
+    if (useSupabase()) {
+      const user = await masterDb.getUserByEmail(email);
+      if (!user || !user.passwordResetToken || !user.passwordResetExpires) {
+        return res.status(400).json(invalidError);
+      }
+      if (new Date() > new Date(user.passwordResetExpires)) {
+        return res.status(400).json({ error: 'Reset code has expired. Please request a new one.' });
+      }
+      const isOtpValid = await bcrypt.compare(String(otp), user.passwordResetToken);
+      if (!isOtpValid) return res.status(400).json(invalidError);
+      const newHash = await bcrypt.hash(newPassword, 10);
+      await masterDb.updateUserPassword(user.id, newHash);
+      await masterDb.updateUser(user.id, { passwordResetToken: null, passwordResetExpires: null });
+      return res.json({ message: 'Password reset successfully. You can now sign in.' });
+    }
+
+    const User = await getUserModel();
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user || !user.passwordResetToken || !user.passwordResetExpires) {
+      return res.status(400).json(invalidError);
+    }
+    if (new Date() > user.passwordResetExpires) {
+      return res.status(400).json({ error: 'Reset code has expired. Please request a new one.' });
+    }
+    const isOtpValid = await bcrypt.compare(String(otp), user.passwordResetToken);
+    if (!isOtpValid) return res.status(400).json(invalidError);
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    user.passwordResetToken = null;
+    user.passwordResetExpires = null;
+    await user.save();
+    return res.json({ message: 'Password reset successfully. You can now sign in.' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: error.message || 'Request failed' });
+  }
+};
+
 export const getCurrentUser = async (req, res) => {
   try {
     const userId = req.user.userId;

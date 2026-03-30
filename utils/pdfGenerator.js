@@ -552,10 +552,10 @@ export const generateContributionReceiptPDF = (receiptData, tenantData = null) =
 
       doc.fillColor(secondaryColor).text(duesAccountantText, currentX, currentY, {
         fontSize,
-        link: 'https://duesaccountantant.winswardtech.com',
+        link: 'https://duesaccountant.winswardtech.com',
         underline: true
       });
-      doc.link(currentX, currentY - fontSize * 0.8, duesAccountantWidth, fontSize * 1.2, 'https://duesaccountantant.winswardtech.com');
+      doc.link(currentX, currentY - fontSize * 0.8, duesAccountantWidth, fontSize * 1.2, 'https://duesaccountant.winswardtech.com');
       currentX += duesAccountantWidth;
 
       doc.fillColor('#999999').text(beforeWinsward, currentX, currentY, { fontSize });
@@ -697,10 +697,10 @@ export const generateReceiptPDFFromReceipt = (receiptData, memberData, tenantDat
       // DUES ACCOUNTANT with link
       doc.fillColor(secondaryColor).text(duesAccountantText, currentX, currentY, { 
         fontSize,
-        link: 'https://duesaccountantant.winswardtech.com',
+        link: 'https://duesaccountant.winswardtech.com',
         underline: true
       });
-      doc.link(currentX, currentY - fontSize * 0.8, duesAccountantWidth, fontSize * 1.2, 'https://duesaccountantant.winswardtech.com');
+      doc.link(currentX, currentY - fontSize * 0.8, duesAccountantWidth, fontSize * 1.2, 'https://duesaccountant.winswardtech.com');
       currentX += duesAccountantWidth;
       
       doc.fillColor('#999999').text(beforeWinsward, currentX, currentY, { fontSize });
