@@ -81,13 +81,15 @@ export const sendRemindersForTenant = async (tenantConnection, triggeredBy = 'sy
           member,
           amountOwed,
           monthsInArrears,
-          verse
+          verse,
+          groupName
         }),
         textContent: renderReminderText({
           member,
           amountOwed,
           monthsInArrears,
-          verse
+          verse,
+          groupName
         }),
         senderName: groupName
       });

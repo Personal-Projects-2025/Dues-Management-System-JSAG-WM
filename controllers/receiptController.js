@@ -195,8 +195,8 @@ export const resendReceiptEmail = async (req, res) => {
       await sendEmail({
         to: [emailTo],
         subject: `Your Dues Payment Receipt - ${groupName}`,
-        htmlContent: renderPaymentReceiptEmail({ member, receipt }),
-        textContent: renderPaymentReceiptText({ member, receipt }),
+        htmlContent: renderPaymentReceiptEmail({ member, receipt, groupName }),
+        textContent: renderPaymentReceiptText({ member, receipt, groupName }),
         attachments: [{ name: `receipt-${receipt.receiptId}.pdf`, content: pdfBuffer }],
         senderName: groupName
       });
@@ -206,8 +206,8 @@ export const resendReceiptEmail = async (req, res) => {
       await sendEmail({
         to: [emailTo],
         subject: `Receipt - ${groupName}`,
-        htmlContent: renderRecorderReceiptEmail({ receipt, recipientName, paymentDescription }),
-        textContent: renderRecorderReceiptText({ receipt, recipientName, paymentDescription }),
+        htmlContent: renderRecorderReceiptEmail({ receipt, recipientName, paymentDescription, groupName }),
+        textContent: renderRecorderReceiptText({ receipt, recipientName, paymentDescription, groupName }),
         attachments: [{ name: `receipt-${receipt.receiptId}.pdf`, content: pdfBuffer }],
         senderName: groupName
       });

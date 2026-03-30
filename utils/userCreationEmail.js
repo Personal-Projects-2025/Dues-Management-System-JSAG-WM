@@ -1,5 +1,5 @@
-export const renderUserCreationEmail = ({ username, email, password, setupLink, loginUrl, role }) => {
-  const systemName = process.env.SYSTEM_NAME || 'Dues Accountant';
+export const renderUserCreationEmail = ({ username, email, password, setupLink, loginUrl, role, tenantName }) => {
+  const systemName = tenantName || process.env.SYSTEM_NAME || 'Dues Accountant';
   const roleDisplay = role === 'system' ? 'System User' : role === 'super' ? 'Super Admin' : 'Admin';
   
   return `
@@ -61,8 +61,8 @@ export const renderUserCreationEmail = ({ username, email, password, setupLink, 
   `;
 };
 
-export const renderUserCreationText = ({ username, email, password, setupLink, loginUrl, role }) => {
-  const systemName = process.env.SYSTEM_NAME || 'Dues Accountant';
+export const renderUserCreationText = ({ username, email, password, setupLink, loginUrl, role, tenantName }) => {
+  const systemName = tenantName || process.env.SYSTEM_NAME || 'Dues Accountant';
   const roleDisplay = role === 'system' ? 'System User' : role === 'super' ? 'Super Admin' : 'Admin';
   
   return `Welcome to ${systemName}

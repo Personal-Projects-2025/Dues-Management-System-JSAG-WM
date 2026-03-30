@@ -298,7 +298,8 @@ export const register = async (req, res) => {
             password: finalPassword,
             setupLink,
             loginUrl,
-            role: userRole
+            role: userRole,
+            tenantName: senderName
           }),
           text: renderUserCreationText({
             username: user.username,
@@ -306,7 +307,8 @@ export const register = async (req, res) => {
             password: finalPassword,
             setupLink,
             loginUrl,
-            role: userRole
+            role: userRole,
+            tenantName: senderName
           }),
           senderName: senderName
         });

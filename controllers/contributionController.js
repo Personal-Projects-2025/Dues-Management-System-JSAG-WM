@@ -149,13 +149,13 @@ export const createContribution = async (req, res) => {
           const allReceipts = await Receipt.find({ memberId: member._id }).sort({ createdAt: -1 });
           pdfBuffer = await generateReceiptPDFFromReceipt(receipt, member, tenantData, allReceipts);
           subject = `Your Dues Payment Receipt - ${groupName}`;
-          htmlContent = renderPaymentReceiptEmail({ member, receipt });
-          textContent = renderPaymentReceiptText({ member, receipt });
+          htmlContent = renderPaymentReceiptEmail({ member, receipt, groupName });
+          textContent = renderPaymentReceiptText({ member, receipt, groupName });
         } else {
           pdfBuffer = await generateContributionReceiptPDF(receipt, tenantData);
           subject = `Contribution Receipt - ${groupName}`;
-          htmlContent = renderContributionReceiptEmail({ receipt, recipientName });
-          textContent = renderContributionReceiptText({ receipt, recipientName });
+          htmlContent = renderContributionReceiptEmail({ receipt, recipientName, groupName });
+          textContent = renderContributionReceiptText({ receipt, recipientName, groupName });
         }
 
         await sendEmail({

@@ -91,8 +91,8 @@ export const recordPayment = async (req, res) => {
         await sendEmail({
           to: [member.email],
           subject: `Your Dues Payment Receipt - ${groupName}`,
-          htmlContent: renderPaymentReceiptEmail({ member, receipt }),
-          textContent: renderPaymentReceiptText({ member, receipt }),
+          htmlContent: renderPaymentReceiptEmail({ member, receipt, groupName }),
+          textContent: renderPaymentReceiptText({ member, receipt, groupName }),
           attachments: [
             {
               name: `receipt-${receipt.receiptId}.pdf`,

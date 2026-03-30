@@ -8,24 +8,28 @@ const formatCurrency = (value) => {
   }).format(value);
 };
 
-export const renderPaymentReceiptEmail = ({ member, receipt }) => {
-  const groupName = process.env.GROUP_NAME || 'Dues Accountant';
+/** Resolve group name: prefer caller-supplied name, then env var, then fallback. */
+const resolveGroupName = (supplied) =>
+  supplied || process.env.GROUP_NAME || 'Dues Accountant';
+
+export const renderPaymentReceiptEmail = ({ member, receipt, groupName }) => {
+  const gName = resolveGroupName(groupName);
   return `
     <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
-      <h2 style="color: #2563eb;">${groupName} &mdash; Payment Receipt</h2>
+      <h2 style="color: #2563eb;">${gName} &mdash; Payment Receipt</h2>
       <p>Hello ${member.name},</p>
       <p>Thank you for your payment of <strong>${formatCurrency(receipt.amount)}</strong> covering <strong>${receipt.monthsCovered}</strong> month(s) of dues.</p>
       <p>Your receipt ID is <strong>${receipt.receiptId}</strong> and was recorded on <strong>${new Date(
         receipt.paymentDate
       ).toLocaleString()}</strong> by <strong>${receipt.recordedBy}</strong>.</p>
       <p>You will find the official PDF receipt attached to this email for your records.</p>
-      <p style="margin-top: 24px;">Blessings,<br/>${groupName} Accounts Team</p>
+      <p style="margin-top: 24px;">Blessings,<br/>${gName} Accounts Team</p>
     </div>
   `;
 };
 
-export const renderPaymentReceiptText = ({ member, receipt }) => {
-  const groupName = process.env.GROUP_NAME || 'Dues Accountant';
+export const renderPaymentReceiptText = ({ member, receipt, groupName }) => {
+  const gName = resolveGroupName(groupName);
   return `Hello ${member.name},
 
 Thank you for your payment of ${formatCurrency(receipt.amount)} covering ${receipt.monthsCovered} month(s) of dues.
@@ -37,26 +41,26 @@ Recorded by: ${receipt.recordedBy}
 Your PDF receipt is attached for your records.
 
 Blessings,
-${groupName} Accounts Team`;
+${gName} Accounts Team`;
 };
 
-export const renderContributionReceiptEmail = ({ receipt, recipientName }) => {
-  const groupName = process.env.GROUP_NAME || 'Dues Accountant';
+export const renderContributionReceiptEmail = ({ receipt, recipientName, groupName }) => {
+  const gName = resolveGroupName(groupName);
   const typeName = receipt.contributionTypeName || 'Contribution';
   return `
     <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
-      <h2 style="color: #2563eb;">${groupName} &mdash; Contribution Receipt</h2>
+      <h2 style="color: #2563eb;">${gName} &mdash; Contribution Receipt</h2>
       <p>Hello ${recipientName},</p>
       <p>Please find the receipt for a contribution of <strong>${formatCurrency(receipt.amount)}</strong> (${typeName}) recorded on <strong>${new Date(receipt.paymentDate).toLocaleString()}</strong>.</p>
       <p>Receipt ID: <strong>${receipt.receiptId}</strong></p>
       <p>The official PDF receipt is attached for your records.</p>
-      <p style="margin-top: 24px;">Blessings,<br/>${groupName} Accounts Team</p>
+      <p style="margin-top: 24px;">Blessings,<br/>${gName} Accounts Team</p>
     </div>
   `;
 };
 
-export const renderContributionReceiptText = ({ receipt, recipientName }) => {
-  const groupName = process.env.GROUP_NAME || 'Dues Accountant';
+export const renderContributionReceiptText = ({ receipt, recipientName, groupName }) => {
+  const gName = resolveGroupName(groupName);
   const typeName = receipt.contributionTypeName || 'Contribution';
   return `Hello ${recipientName},
 
@@ -67,26 +71,26 @@ Receipt ID: ${receipt.receiptId}
 The PDF receipt is attached for your records.
 
 Blessings,
-${groupName} Accounts Team`;
+${gName} Accounts Team`;
 };
 
-export const renderRecorderReceiptEmail = ({ receipt, recipientName, paymentDescription }) => {
-  const groupName = process.env.GROUP_NAME || 'Dues Accountant';
+export const renderRecorderReceiptEmail = ({ receipt, recipientName, paymentDescription, groupName }) => {
+  const gName = resolveGroupName(groupName);
   const desc = paymentDescription || receipt.contributionTypeName || 'contribution';
   return `
     <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
-      <h2 style="color: #2563eb;">${groupName} &mdash; Receipt (Recorded by You)</h2>
+      <h2 style="color: #2563eb;">${gName} &mdash; Receipt (Recorded by You)</h2>
       <p>Hello ${recipientName},</p>
       <p>Please find the receipt for the ${desc} of <strong>${formatCurrency(receipt.amount)}</strong> that you recorded on <strong>${new Date(receipt.paymentDate).toLocaleString()}</strong>.</p>
       <p>Receipt ID: <strong>${receipt.receiptId}</strong></p>
       <p>The PDF receipt is attached for your records.</p>
-      <p style="margin-top: 24px;">Blessings,<br/>${groupName} Accounts Team</p>
+      <p style="margin-top: 24px;">Blessings,<br/>${gName} Accounts Team</p>
     </div>
   `;
 };
 
-export const renderRecorderReceiptText = ({ receipt, recipientName, paymentDescription }) => {
-  const groupName = process.env.GROUP_NAME || 'Dues Accountant';
+export const renderRecorderReceiptText = ({ receipt, recipientName, paymentDescription, groupName }) => {
+  const gName = resolveGroupName(groupName);
   const desc = paymentDescription || receipt.contributionTypeName || 'contribution';
   return `Hello ${recipientName},
 
@@ -97,7 +101,7 @@ Receipt ID: ${receipt.receiptId}
 The PDF receipt is attached for your records.
 
 Blessings,
-${groupName} Accounts Team`;
+${gName} Accounts Team`;
 };
 
 const scriptureVerses = [
@@ -125,11 +129,11 @@ const scriptureVerses = [
 
 export const pickScriptureVerse = (index = 0) => scriptureVerses[index % scriptureVerses.length];
 
-export const renderReminderEmail = ({ member, amountOwed, monthsInArrears, verse }) => {
-  const groupName = process.env.GROUP_NAME || 'Dues Accountant';
+export const renderReminderEmail = ({ member, amountOwed, monthsInArrears, verse, groupName }) => {
+  const gName = resolveGroupName(groupName);
   return `
     <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.5;">
-      <h2 style="color: #2563eb;">${groupName} &mdash; Monthly Dues Reminder</h2>
+      <h2 style="color: #2563eb;">${gName} &mdash; Monthly Dues Reminder</h2>
       <p>Hello ${member.name},</p>
       <p>As of today, your outstanding dues amount to <strong>${formatCurrency(amountOwed)}</strong>, covering <strong>${monthsInArrears}</strong> month(s).</p>
       <blockquote style="border-left: 4px solid #2563eb; margin: 16px 0; padding: 8px 16px; color: #1d4ed8;">
@@ -137,13 +141,13 @@ export const renderReminderEmail = ({ member, amountOwed, monthsInArrears, verse
         <strong>&mdash; ${verse.reference}</strong>
       </blockquote>
       <p>Your continued support keeps our community thriving. You can make your payment at any time through the usual channels.</p>
-      <p style="margin-top: 24px;">Blessings,<br/>${groupName} Accounts Team</p>
+      <p style="margin-top: 24px;">Blessings,<br/>${gName} Accounts Team</p>
     </div>
   `;
 };
 
-export const renderReminderText = ({ member, amountOwed, monthsInArrears, verse }) => {
-  const groupName = process.env.GROUP_NAME || 'Dues Accountant';
+export const renderReminderText = ({ member, amountOwed, monthsInArrears, verse, groupName }) => {
+  const gName = resolveGroupName(groupName);
   return `Hello ${member.name},
 
 As of today, your outstanding dues amount to ${formatCurrency(amountOwed)}, covering ${monthsInArrears} month(s).
@@ -154,8 +158,5 @@ As of today, your outstanding dues amount to ${formatCurrency(amountOwed)}, cove
 Your continued support keeps our community thriving. You can make your payment at any time through the usual channels.
 
 Blessings,
-${groupName} Accounts Team`;
+${gName} Accounts Team`;
 };
-
-
-

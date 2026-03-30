@@ -176,7 +176,8 @@ export const createSystemUser = async (req, res) => {
           password: finalPassword,
           setupLink,
           loginUrl,
-          role
+          role,
+          tenantName: senderName
         }),
         text: renderUserCreationText({
           username: user.username,
@@ -184,7 +185,8 @@ export const createSystemUser = async (req, res) => {
           password: finalPassword,
           setupLink,
           loginUrl,
-          role
+          role,
+          tenantName: senderName
         }),
         senderName: senderName
       });
