@@ -300,6 +300,92 @@ function isValidId(value) {
 }
 
 /**
+ * Validation rules for budget creation/update
+ */
+export const validateBudget = [
+  body('periodStart')
+    .optional()
+    .isISO8601()
+    .withMessage('periodStart must be a valid ISO 8601 date'),
+  body('periodEnd')
+    .optional()
+    .isISO8601()
+    .withMessage('periodEnd must be a valid ISO 8601 date'),
+  body().custom((value) => {
+    if (value.periodStart && value.periodEnd) {
+      if (new Date(value.periodEnd) <= new Date(value.periodStart)) {
+        throw new Error('periodEnd must be after periodStart');
+      }
+    }
+    return true;
+  }),
+  body('name')
+    .optional()
+    .trim()
+    .isLength({ max: 150 })
+    .withMessage('Name must be less than 150 characters'),
+  body('lines')
+    .optional()
+    .isArray()
+    .withMessage('lines must be an array'),
+  body('lines.*.category')
+    .if(body('lines').exists())
+    .trim()
+    .notEmpty()
+    .withMessage('Each line must have a non-empty category')
+    .isLength({ max: 50 })
+    .withMessage('Category must be less than 50 characters'),
+  body('lines.*.plannedAmount')
+    .if(body('lines').exists())
+    .isFloat({ min: 0 })
+    .withMessage('Each line plannedAmount must be a non-negative number'),
+  handleValidationErrors,
+];
+
+/**
+ * Validation rules for budget creation (period required)
+ */
+export const validateCreateBudget = [
+  body('periodStart')
+    .notEmpty()
+    .withMessage('periodStart is required')
+    .isISO8601()
+    .withMessage('periodStart must be a valid ISO 8601 date'),
+  body('periodEnd')
+    .notEmpty()
+    .withMessage('periodEnd is required')
+    .isISO8601()
+    .withMessage('periodEnd must be a valid ISO 8601 date'),
+  body().custom((value) => {
+    if (new Date(value.periodEnd) <= new Date(value.periodStart)) {
+      throw new Error('periodEnd must be after periodStart');
+    }
+    return true;
+  }),
+  body('name')
+    .optional()
+    .trim()
+    .isLength({ max: 150 })
+    .withMessage('Name must be less than 150 characters'),
+  body('lines')
+    .optional()
+    .isArray()
+    .withMessage('lines must be an array'),
+  body('lines.*.category')
+    .if(body('lines').exists())
+    .trim()
+    .notEmpty()
+    .withMessage('Each line must have a non-empty category')
+    .isLength({ max: 50 })
+    .withMessage('Category must be less than 50 characters'),
+  body('lines.*.plannedAmount')
+    .if(body('lines').exists())
+    .isFloat({ min: 0 })
+    .withMessage('Each line plannedAmount must be a non-negative number'),
+  handleValidationErrors,
+];
+
+/**
  * Validation rules for MongoDB ID parameters (also accepts UUID when using Supabase)
  */
 export const validateMongoId = [

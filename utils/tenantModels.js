@@ -12,7 +12,8 @@ import {
   reminderSchema,
   activityLogSchema,
   contributionTypeSchema,
-  contributionSchema
+  contributionSchema,
+  budgetSchema
 } from '../models/schemas.js';
 import { getTenantModel } from './modelFactory.js';
 import { getTenantModels as getSupabaseTenantModels } from '../db/tenantDb.js';
@@ -43,7 +44,8 @@ export const getTenantModels = (req) => {
     Reminder: getTenantModel(req.tenantConnection, 'Reminder', reminderSchema),
     ActivityLog: getTenantModel(req.tenantConnection, 'ActivityLog', activityLogSchema),
     ContributionType: getTenantModel(req.tenantConnection, 'ContributionType', contributionTypeSchema),
-    Contribution: getTenantModel(req.tenantConnection, 'Contribution', contributionSchema)
+    Contribution: getTenantModel(req.tenantConnection, 'Contribution', contributionSchema),
+    Budget: getTenantModel(req.tenantConnection, 'Budget', budgetSchema)
   };
 };
 

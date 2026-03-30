@@ -15,6 +15,7 @@ import reportRoutes from './routes/reportRoutes.js';
 import logRoutes from './routes/logRoutes.js';
 import receiptRoutes from './routes/receiptRoutes.js';
 import expenditureRoutes from './routes/expenditureRoutes.js';
+import budgetRoutes from './routes/budgetRoutes.js';
 import contributionRoutes from './routes/contributionRoutes.js';
 import contributionTypeRoutes from './routes/contributionTypeRoutes.js';
 import subgroupRoutes from './routes/subgroupRoutes.js';
@@ -168,6 +169,7 @@ const initializeServer = async () => {
     app.use('/api/logs', logRoutes);
     app.use('/api/receipts', receiptRoutes);
     app.use('/api/expenditure', expenditureRoutes);
+    app.use('/api/budgets', budgetRoutes);
     app.use('/api/contributions', contributionRoutes);
     app.use('/api/contribution-types', contributionTypeRoutes);
     app.use('/api/subgroups', subgroupRoutes);

@@ -3,7 +3,7 @@
  * Replaces Mongoose tenant models with same API shape (find, findById, create, etc.).
  */
 import { getSupabase } from '../config/supabase.js';
-import { fromRow, fromRows, toRow, calculateArrears } from './helpers.js';
+import { fromRow, fromRows, toRow, calculateArrears, aggregateExpendituresByCategory } from './helpers.js';
 
 const sb = () => getSupabase();
 
@@ -276,6 +276,115 @@ function activityLogModel(tenantId) {
   return tableModel('activity_logs', tenantId);
 }
 
+// ---------- Budgets ----------
+function budgetModel(tenantId) {
+  const t = tenantId;
+
+  async function attachLines(budget) {
+    if (!budget) return null;
+    const { data, error } = await sb()
+      .from('budget_lines')
+      .select('*')
+      .eq('budget_id', budget.id)
+      .order('category', { ascending: true });
+    if (error) throw error;
+    budget.lines = fromRows(data);
+    return budget;
+  }
+
+  return {
+    find() {
+      const promise = (async () => {
+        const { data, error } = await sb()
+          .from('budgets')
+          .select('*')
+          .eq('tenant_id', t)
+          .order('period_start', { ascending: false });
+        if (error) throw error;
+        return Promise.all(fromRows(data).map(attachLines));
+      })();
+      return chainable(promise);
+    },
+    findById(id) {
+      const promise = (async () => {
+        const { data, error } = await sb()
+          .from('budgets')
+          .select('*')
+          .eq('tenant_id', t)
+          .eq('id', id)
+          .maybeSingle();
+        if (error) throw error;
+        return attachLines(fromRow(data));
+      })();
+      return chainable(promise);
+    },
+    async create(fields) {
+      const { lines = [], ...meta } = fields;
+      const row = toRow({ ...meta, tenantId: t });
+      const { data, error } = await sb().from('budgets').insert(row).select('*').single();
+      if (error) throw error;
+      const budget = fromRow(data);
+
+      if (lines.length > 0) {
+        const lineRows = lines.map((l) => toRow({ ...l, budgetId: budget.id, tenantId: t }));
+        const { error: le } = await sb().from('budget_lines').insert(lineRows);
+        if (le) throw le;
+      }
+
+      return attachLines(budget);
+    },
+    async update(id, fields) {
+      const { lines, ...meta } = fields;
+      const row = toRow(meta, ['tenantId']);
+      row.updated_at = new Date().toISOString();
+      const { data, error } = await sb()
+        .from('budgets')
+        .update(row)
+        .eq('tenant_id', t)
+        .eq('id', id)
+        .select('*')
+        .single();
+      if (error) throw error;
+      const budget = fromRow(data);
+
+      if (lines !== undefined) {
+        const { error: de } = await sb().from('budget_lines').delete().eq('budget_id', id);
+        if (de) throw de;
+
+        if (lines.length > 0) {
+          const lineRows = lines.map((l) => toRow({ ...l, budgetId: id, tenantId: t }));
+          const { error: ie } = await sb().from('budget_lines').insert(lineRows);
+          if (ie) throw ie;
+        }
+      }
+
+      return attachLines(budget);
+    },
+    async findByIdAndUpdate(id, fields) {
+      return this.update(id, fields);
+    },
+    async findByIdAndDelete(id) {
+      const { error } = await sb().from('budgets').delete().eq('tenant_id', t).eq('id', id);
+      if (error) throw error;
+    },
+    async findOverlapping(start, end, excludeId = null) {
+      let q = sb()
+        .from('budgets')
+        .select('id, name, period_start, period_end')
+        .eq('tenant_id', t)
+        .lte('period_start', end)
+        .gte('period_end', start);
+      if (excludeId) q = q.neq('id', excludeId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return fromRows(data);
+    },
+    async aggregateActuals(start, end) {
+      return aggregateExpendituresByCategory(sb, t, start, end);
+    }
+  };
+}
+
 // ---------- Payment history (for recording dues payments) ----------
 export async function addPaymentToMember(tenantId, memberId, payment) {
   const row = {
@@ -305,6 +414,7 @@ export function getTenantModels(req) {
     Reminder: reminderModel(tenantId),
     ActivityLog: activityLogModel(tenantId),
     ContributionType: contributionTypeModel(tenantId),
-    Contribution: contributionModel(tenantId)
+    Contribution: contributionModel(tenantId),
+    Budget: budgetModel(tenantId)
   };
 }

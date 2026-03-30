@@ -216,6 +216,32 @@ CREATE TABLE IF NOT EXISTS activity_logs (
 
 CREATE INDEX IF NOT EXISTS idx_activity_logs_tenant ON activity_logs(tenant_id);
 
+CREATE TABLE IF NOT EXISTS budgets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  name TEXT,
+  period_start DATE NOT NULL,
+  period_end DATE NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_budgets_tenant ON budgets(tenant_id);
+
+CREATE TABLE IF NOT EXISTS budget_lines (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  budget_id UUID NOT NULL REFERENCES budgets(id) ON DELETE CASCADE,
+  category TEXT NOT NULL,
+  planned_amount NUMERIC(12,2) NOT NULL CHECK (planned_amount >= 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(budget_id, category)
+);
+
+CREATE INDEX IF NOT EXISTS idx_budget_lines_budget ON budget_lines(budget_id);
+CREATE INDEX IF NOT EXISTS idx_budget_lines_tenant ON budget_lines(tenant_id);
+
 -- Optional: Row Level Security (RLS) - enable if using Supabase Auth + anon key
 -- ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE users ENABLE ROW LEVEL SECURITY;

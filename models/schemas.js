@@ -341,6 +341,39 @@ export const contributionSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Budget Line Schema (embedded in Budget)
+export const budgetLineSchema = new mongoose.Schema({
+  category: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  plannedAmount: {
+    type: Number,
+    required: true,
+    min: 0
+  }
+}, { _id: false });
+
+// Budget Schema
+export const budgetSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    trim: true
+  },
+  periodStart: {
+    type: Date,
+    required: true
+  },
+  periodEnd: {
+    type: Date,
+    required: true
+  },
+  lines: [budgetLineSchema]
+}, {
+  timestamps: true
+});
+
 // Activity Log Schema
 export const activityLogSchema = new mongoose.Schema({
   actor: {

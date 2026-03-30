@@ -30,6 +30,27 @@ export const toRow = (obj, exclude = []) => {
 };
 
 /**
+ * Aggregate expenditure amounts grouped by category for a tenant within a date range.
+ * Returns { [category: string]: number } — category keys are trimmed; blank categories
+ * are stored under 'Uncategorized'.
+ */
+export async function aggregateExpendituresByCategory(sb, tenantId, start, end) {
+  const { data, error } = await sb()
+    .from('expenditures')
+    .select('category, amount')
+    .eq('tenant_id', tenantId)
+    .gte('date', start)
+    .lte('date', end);
+  if (error) throw error;
+  const result = {};
+  for (const row of data || []) {
+    const cat = (row.category || '').trim() || 'Uncategorized';
+    result[cat] = (result[cat] || 0) + Number(row.amount || 0);
+  }
+  return result;
+}
+
+/**
  * Calculate arrears for a member (same logic as Mongoose method).
  */
 export const calculateArrears = (member) => {
