@@ -4,8 +4,11 @@ import { pickScriptureVerse, renderReminderEmail, renderReminderText } from '../
 import { getTenantModel } from '../models/Tenant.js';
 import { getTenantConnection } from '../utils/connectionManager.js';
 import { getTenantModels } from '../utils/tenantModels.js';
+import { useSupabase } from '../config/supabase.js';
+import * as masterDb from '../db/masterDb.js';
 
-const DEFAULT_CRON = '0 8 25 * *'; // 08:00 on the 25th of every month
+// Runs every day at 08:00; only sends for tenants whose reminderDay matches today
+const DEFAULT_CRON = '0 8 * * *';
 
 const calculateAmountOwed = (member) => {
   const arrears = member.calculateArrears();
@@ -120,40 +123,49 @@ export const sendRemindersForTenant = async (tenantConnection, triggeredBy = 'sy
 };
 
 /**
- * Send reminders for all active tenants (system-wide)
+ * Send reminders for all active tenants whose reminderDay matches today (system-wide).
+ * When triggeredBy is 'manual', skip the day-of-month check and send immediately.
  */
 export const sendReminders = async (triggeredBy = 'system') => {
   try {
-    const Tenant = await getTenantModel();
-    const activeTenants = await Tenant.find({ 
-      status: 'active',
-      deletedAt: null
-    });
-
+    const todayDay = new Date().getDate();
     const results = [];
 
-    for (const tenant of activeTenants) {
-      try {
-        const tenantConnection = await getTenantConnection(tenant.databaseName);
-        const result = await sendRemindersForTenant(tenantConnection, triggeredBy, tenant);
-        results.push({
-          tenant: tenant.name,
-          ...result
-        });
-      } catch (error) {
-        console.error(`Failed to send reminders for tenant ${tenant.name}:`, error);
-        results.push({
-          tenant: tenant.name,
-          error: error.message,
-          processed: 0,
-          sent: 0,
-          failed: 0
-        });
+    if (useSupabase()) {
+      const activeTenants = await masterDb.findTenants({ status: 'active', deletedAt: null });
+      for (const tenant of activeTenants) {
+        try {
+          const reminderDay = tenant.config?.settings?.reminderDay ?? 25;
+          if (triggeredBy === 'system' && todayDay !== reminderDay) continue;
+
+          const fakeReq = { tenantId: tenant.id, tenantConnection: { _supabase: true }, tenant };
+          const { Member, Reminder } = getTenantModels(fakeReq);
+          const result = await sendRemindersForTenant({ models: { Member, Reminder } }, triggeredBy, tenant);
+          results.push({ tenant: tenant.name, ...result });
+        } catch (error) {
+          console.error(`Failed to send reminders for tenant ${tenant.name}:`, error);
+          results.push({ tenant: tenant.name, error: error.message, processed: 0, sent: 0, failed: 0 });
+        }
+      }
+    } else {
+      const Tenant = await getTenantModel();
+      const activeTenants = await Tenant.find({ status: 'active', deletedAt: null });
+      for (const tenant of activeTenants) {
+        try {
+          const reminderDay = tenant.config?.settings?.reminderDay ?? 25;
+          if (triggeredBy === 'system' && todayDay !== reminderDay) continue;
+
+          const tenantConnection = await getTenantConnection(tenant.databaseName);
+          const result = await sendRemindersForTenant(tenantConnection, triggeredBy, tenant);
+          results.push({ tenant: tenant.name, ...result });
+        } catch (error) {
+          console.error(`Failed to send reminders for tenant ${tenant.name}:`, error);
+          results.push({ tenant: tenant.name, error: error.message, processed: 0, sent: 0, failed: 0 });
+        }
       }
     }
 
-    // Aggregate totals
-    const total = {
+    return {
       processed: results.reduce((sum, r) => sum + (r.processed || 0), 0),
       sent: results.reduce((sum, r) => sum + (r.sent || 0), 0),
       failed: results.reduce((sum, r) => sum + (r.failed || 0), 0),
@@ -161,8 +173,6 @@ export const sendReminders = async (triggeredBy = 'system') => {
       runAt: new Date(),
       tenants: results.length
     };
-
-    return total;
   } catch (error) {
     console.error('Error sending reminders:', error);
     throw error;

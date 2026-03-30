@@ -13,7 +13,8 @@ import {
   activityLogSchema,
   contributionTypeSchema,
   contributionSchema,
-  budgetSchema
+  budgetSchema,
+  appreciationLogSchema
 } from '../models/schemas.js';
 import { getTenantModel } from './modelFactory.js';
 import { getTenantModels as getSupabaseTenantModels } from '../db/tenantDb.js';
@@ -45,7 +46,8 @@ export const getTenantModels = (req) => {
     ActivityLog: getTenantModel(req.tenantConnection, 'ActivityLog', activityLogSchema),
     ContributionType: getTenantModel(req.tenantConnection, 'ContributionType', contributionTypeSchema),
     Contribution: getTenantModel(req.tenantConnection, 'Contribution', contributionSchema),
-    Budget: getTenantModel(req.tenantConnection, 'Budget', budgetSchema)
+    Budget: getTenantModel(req.tenantConnection, 'Budget', budgetSchema),
+    AppreciationLog: getTenantModel(req.tenantConnection, 'AppreciationLog', appreciationLogSchema)
   };
 };
 

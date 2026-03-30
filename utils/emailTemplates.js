@@ -146,6 +146,58 @@ export const renderReminderEmail = ({ member, amountOwed, monthsInArrears, verse
   `;
 };
 
+export const renderAppreciationEmail = ({ member, groupName, monthsCompleted = 12 }) => {
+  const gName = resolveGroupName(groupName);
+  return `
+    <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6; max-width: 520px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #1d4ed8 0%, #7c3aed 100%); padding: 32px; border-radius: 12px 12px 0 0; text-align: center;">
+        <div style="font-size: 48px; margin-bottom: 8px;">🎉</div>
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800;">Thank You!</h1>
+        <p style="color: #c7d2fe; margin: 6px 0 0; font-size: 14px;">${gName}</p>
+      </div>
+      <div style="background: #ffffff; padding: 32px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 12px 12px;">
+        <p style="margin: 0 0 16px; font-size: 16px;">Dear <strong>${member.name}</strong>,</p>
+        <p style="margin: 0 0 16px; font-size: 15px; color: #374151;">
+          We are overjoyed to celebrate a remarkable milestone with you! You have faithfully paid your dues for
+          <strong>${monthsCompleted} full months</strong> — and that means everything to our community.
+        </p>
+        <div style="background: #f5f3ff; border-left: 4px solid #7c3aed; border-radius: 0 8px 8px 0; padding: 16px 20px; margin: 20px 0;">
+          <p style="margin: 0; font-size: 15px; color: #5b21b6; font-weight: 600;">
+            Your consistency, generosity, and commitment are the foundation on which we build together.
+          </p>
+        </div>
+        <p style="margin: 0 0 16px; font-size: 15px; color: #374151;">
+          Because of faithful members like you, our community continues to grow, serve, and thrive.
+          We truly appreciate you and the sacrifice you make month after month.
+        </p>
+        <blockquote style="border-left: 4px solid #2563eb; margin: 20px 0; padding: 10px 16px; color: #1d4ed8; font-style: italic;">
+          "Well done, good and faithful servant." — Matthew 25:21
+        </blockquote>
+        <p style="margin: 24px 0 0; font-size: 14px; color: #374151;">
+          With much appreciation,<br/>
+          <strong>${gName} Accounts Team</strong>
+        </p>
+      </div>
+    </div>
+  `;
+};
+
+export const renderAppreciationText = ({ member, groupName, monthsCompleted = 12 }) => {
+  const gName = resolveGroupName(groupName);
+  return `Dear ${member.name},
+
+We are overjoyed to celebrate a remarkable milestone with you! You have faithfully paid your dues for ${monthsCompleted} full months.
+
+Your consistency, generosity, and commitment are the foundation on which we build together.
+
+Because of faithful members like you, our community continues to grow, serve, and thrive. We truly appreciate you and the sacrifice you make month after month.
+
+"Well done, good and faithful servant." — Matthew 25:21
+
+With much appreciation,
+${gName} Accounts Team`;
+};
+
 export const renderPasswordResetOtpEmail = ({ otp, username }) => `
   <div style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6; max-width: 480px; margin: 0 auto;">
     <div style="background: #2563eb; padding: 28px 32px; border-radius: 12px 12px 0 0; text-align: center;">

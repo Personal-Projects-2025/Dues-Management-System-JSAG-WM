@@ -404,6 +404,21 @@ export const budgetSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Appreciation Log Schema — one record per member who received an appreciation email
+export const appreciationLogSchema = new mongoose.Schema({
+  memberId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Member',
+    required: true,
+    unique: true
+  },
+  memberName: { type: String, default: '' },
+  email: { type: String, required: true },
+  sentAt: { type: Date, default: Date.now },
+  delayMonths: { type: Number, required: true },
+  completionDate: { type: Date }
+}, { timestamps: true });
+
 // Activity Log Schema
 export const activityLogSchema = new mongoose.Schema({
   actor: {

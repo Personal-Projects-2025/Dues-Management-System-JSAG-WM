@@ -1,15 +1,16 @@
 import { getTenantModels } from '../utils/tenantModels.js';
 import { sendRemindersForTenant } from '../jobs/reminderScheduler.js';
 
-const calculateNextReminderDate = () => {
+const calculateNextReminderDate = (reminderDay = 25) => {
   const now = new Date();
   const next = new Date(now);
+  const day = Number(reminderDay) || 25;
 
-  if (now.getDate() > 25 || (now.getDate() === 25 && now.getHours() >= 8)) {
+  if (now.getDate() > day || (now.getDate() === day && now.getHours() >= 8)) {
     next.setMonth(next.getMonth() + 1);
   }
 
-  next.setDate(25);
+  next.setDate(day);
   next.setHours(8, 0, 0, 0);
   return next;
 };
@@ -67,9 +68,11 @@ export const getReminderSummary = async (req, res) => {
       }
     });
 
+    const reminderDay = req.tenant?.config?.settings?.reminderDay ?? 25;
     res.json({
       lastReminderSentAt: lastReminder?.sentAt || null,
-      nextReminderScheduledAt: calculateNextReminderDate(),
+      nextReminderScheduledAt: calculateNextReminderDate(reminderDay),
+      reminderDay,
       totalOutstandingMembers,
       totalOutstandingAmount
     });
