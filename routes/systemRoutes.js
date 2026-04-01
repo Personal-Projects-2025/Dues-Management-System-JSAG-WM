@@ -4,7 +4,9 @@ import { requireSystemUser } from '../middleware/tenantMiddleware.js';
 import {
   getSystemUsers,
   getSuperUsers,
-  createSystemUser
+  createSystemUser,
+  getTenantUsers,
+  updateTenantUserRole
 } from '../controllers/systemController.js';
 
 const router = express.Router();
@@ -16,6 +18,8 @@ router.use(requireSystemUser);
 router.get('/users', getSystemUsers);
 router.get('/super-users', getSuperUsers);
 router.post('/create-user', createSystemUser);
+router.get('/tenant-users/:tenantId', getTenantUsers);
+router.patch('/tenant-users/:userId/role', updateTenantUserRole);
 
 export default router;
 

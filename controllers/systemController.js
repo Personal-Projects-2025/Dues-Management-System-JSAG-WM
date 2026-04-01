@@ -2,6 +2,8 @@ import bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { getUserModel } from '../models/User.js';
 import { getTenantModel } from '../models/Tenant.js';
+import { useSupabase } from '../config/supabase.js';
+import * as masterDb from '../db/masterDb.js';
 
 /**
  * Get all System Users
@@ -206,6 +208,88 @@ export const createSystemUser = async (req, res) => {
       },
       passwordGenerated: !password
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * Get all users belonging to a specific tenant
+ */
+export const getTenantUsers = async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+
+    if (useSupabase()) {
+      const users = await masterDb.findUsers({ tenantId });
+      const filtered = users
+        .filter(u => ['admin', 'super'].includes(u.role))
+        .map(u => ({
+          id: u.id,
+          username: u.username,
+          email: u.email,
+          role: u.role,
+          lastLogin: u.lastLogin,
+          createdAt: u.createdAt
+        }));
+      return res.json(filtered);
+    }
+
+    const User = await getUserModel();
+    const users = await User.find({
+      tenantId,
+      role: { $in: ['admin', 'super'] }
+    })
+      .select('username email role lastLogin createdAt')
+      .sort({ createdAt: 1 });
+
+    res.json(users.map(u => ({
+      id: u._id,
+      username: u.username,
+      email: u.email,
+      role: u.role,
+      lastLogin: u.lastLogin,
+      createdAt: u.createdAt
+    })));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+/**
+ * Promote / demote a tenant user between admin ↔ super
+ */
+export const updateTenantUserRole = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { role } = req.body;
+
+    if (!['admin', 'super'].includes(role)) {
+      return res.status(400).json({ error: 'Role must be either "admin" or "super"' });
+    }
+
+    if (useSupabase()) {
+      const users = await masterDb.findUsers({});
+      const target = users.find(u => u.id === userId || u.id === Number(userId));
+      if (!target) return res.status(404).json({ error: 'User not found' });
+      if (!['admin', 'super'].includes(target.role)) {
+        return res.status(400).json({ error: 'Can only manage admin/super users through this endpoint' });
+      }
+      await masterDb.updateUser(target.id, { role });
+      return res.json({ message: 'Role updated successfully', userId: target.id, role });
+    }
+
+    const User = await getUserModel();
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!['admin', 'super'].includes(user.role)) {
+      return res.status(400).json({ error: 'Can only manage admin/super users through this endpoint' });
+    }
+
+    user.role = role;
+    await user.save();
+
+    res.json({ message: 'Role updated successfully', userId: user._id, role });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

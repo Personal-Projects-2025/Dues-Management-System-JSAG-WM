@@ -155,7 +155,7 @@ export const registerTenant = async (req, res) => {
         username: adminUsername,
         email: adminEmail ? adminEmail.toLowerCase() : null,
         passwordHash,
-        role: 'admin',
+        role: 'super',
         tenantId: tenant._id,
         passwordResetToken: resetToken,
         passwordResetExpires: resetTokenExpires
