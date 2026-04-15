@@ -64,6 +64,7 @@ const tenantSchema = new mongoose.Schema({
     },
     settings: {
       emailNotifications: { type: Boolean, default: true },
+      smsNotifications: { type: Boolean, default: true },
       autoReceipts: { type: Boolean, default: true },
       reminderEnabled: { type: Boolean, default: true },
       reminderDay: { type: Number, default: 25, min: 1, max: 28 },

@@ -51,6 +51,11 @@ export const memberSchema = new mongoose.Schema({
     lowercase: true,
     match: [/^\S+@\S+\.\S+$/, 'Invalid email address']
   },
+  phone: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   role: {
     type: String,
     enum: ['member', 'admin'],

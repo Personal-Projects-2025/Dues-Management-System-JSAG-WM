@@ -3,12 +3,24 @@ import { getTenantModel } from '../models/Tenant.js';
 import { getUserModel } from '../models/User.js';
 import { getTenantConnection } from '../utils/connectionManager.js';
 import { initializeTenantSchema } from '../scripts/initializeTenantSchema.js';
+import { validateRegistrationSessionForFinalize } from './tenantRegistrationOtpController.js';
+import { sendSms, normalizeGhanaPhone } from '../utils/smsNotifyGh.js';
+import { smsTenantRegistrationWelcome } from '../utils/smsTemplates.js';
 
 /**
  * Register a new tenant (self-service or super admin)
+ * Self-service must include sessionId and pass OTP verification (unless system user).
  */
 export const registerTenant = async (req, res) => {
   try {
+    const bypassOtp = req.user?.role === 'system';
+    if (!bypassOtp) {
+      const check = await validateRegistrationSessionForFinalize(req.body);
+      if (!check.ok) {
+        return res.status(400).json({ error: check.error });
+      }
+    }
+
     const {
       name,
       slug,
@@ -18,7 +30,8 @@ export const registerTenant = async (req, res) => {
       adminEmail,
       contactEmail,
       contactPhone,
-      branding
+      branding,
+      sessionId
     } = req.body;
 
     // Validation
@@ -26,6 +39,14 @@ export const registerTenant = async (req, res) => {
       return res.status(400).json({
         error: 'Name, slug, database name, admin username, and password are required'
       });
+    }
+
+    if (!bypassOtp) {
+      if (!adminEmail || !contactPhone || !sessionId) {
+        return res.status(400).json({
+          error: 'Admin email, contact phone, and sessionId are required after verification'
+        });
+      }
     }
 
     // Validate database name format
@@ -110,6 +131,7 @@ export const registerTenant = async (req, res) => {
         },
         settings: {
           emailNotifications: true,
+          smsNotifications: true,
           autoReceipts: true,
           reminderEnabled: true
         },
@@ -121,7 +143,7 @@ export const registerTenant = async (req, res) => {
       },
       contact: {
         email: contactEmail || '',
-        phone: contactPhone || '',
+        phone: (normalizeGhanaPhone(contactPhone) || contactPhone || '').trim(),
         address: ''
       },
       createdBy: req.user?.userId || null
@@ -151,9 +173,11 @@ export const registerTenant = async (req, res) => {
       const resetToken = randomBytes(32).toString('hex');
       const resetTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
       
+      const adminPhoneNorm = normalizeGhanaPhone(contactPhone) || null;
       adminUser = new User({
         username: adminUsername,
         email: adminEmail ? adminEmail.toLowerCase() : null,
+        phone: adminPhoneNorm,
         passwordHash,
         role: 'super',
         tenantId: tenant._id,
@@ -265,6 +289,32 @@ export const registerTenant = async (req, res) => {
     } catch (emailError) {
       console.error('Failed to send tenant approval notification email:', emailError);
       // Don't fail tenant creation if email fails
+    }
+
+    // Welcome SMS to verified org phone (self-service flow)
+    if (!bypassOtp && contactPhone) {
+      try {
+        const to = normalizeGhanaPhone(contactPhone);
+        if (to) {
+          const groupLabel = tenant.config?.branding?.name || tenant.name || 'Dues Accountant';
+          await sendSms({
+            to,
+            message: smsTenantRegistrationWelcome({ tenantName: tenant.name, groupLabel })
+          });
+        }
+      } catch (smsErr) {
+        console.error('Failed to send registration welcome SMS:', smsErr);
+      }
+    }
+
+    if (!bypassOtp && sessionId) {
+      try {
+        const { getTenantRegistrationSessionModel } = await import('../models/TenantRegistrationSession.js');
+        const Session = await getTenantRegistrationSessionModel();
+        await Session.deleteMany({ sessionId });
+      } catch (e) {
+        console.warn('Could not delete registration session', e.message);
+      }
     }
 
     res.status(201).json({

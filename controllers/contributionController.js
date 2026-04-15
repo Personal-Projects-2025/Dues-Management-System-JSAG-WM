@@ -1,8 +1,9 @@
 import { getTenantModels } from '../utils/tenantModels.js';
 import { generateReceiptPDFFromReceipt, generateContributionReceiptPDF } from '../utils/pdfGenerator.js';
-import { sendEmail } from '../utils/mailer.js';
+import { sendEmailIfAllowed, sendSmsIfAllowed } from '../utils/notifyChannels.js';
 import { renderPaymentReceiptEmail, renderPaymentReceiptText, renderContributionReceiptEmail, renderContributionReceiptText } from '../utils/emailTemplates.js';
 import { getUserModel } from '../models/User.js';
+import { smsPaymentReceipt, smsContributionReceipt } from '../utils/smsTemplates.js';
 
 const generateReceiptId = () => {
   const now = new Date();
@@ -75,6 +76,7 @@ export const createContribution = async (req, res) => {
 
     let receipt = null;
     let receiptEmailStatus = 'pending';
+    let receiptSmsStatus = 'missing';
 
     const tenantData = req.tenant ? {
       name: req.tenant.name,
@@ -158,7 +160,8 @@ export const createContribution = async (req, res) => {
           textContent = renderContributionReceiptText({ receipt, recipientName, groupName });
         }
 
-        await sendEmail({
+        const emailRes = await sendEmailIfAllowed({
+          tenant: req.tenant,
           to: [emailTo],
           subject,
           htmlContent,
@@ -166,13 +169,39 @@ export const createContribution = async (req, res) => {
           attachments: [{ name: `receipt-${receipt.receiptId}.pdf`, content: pdfBuffer }],
           senderName: groupName
         });
-        receiptEmailStatus = 'sent';
+        receiptEmailStatus = emailRes.skipped ? 'skipped' : 'sent';
       } catch (emailError) {
         console.error('Failed to send receipt email', emailError);
         receiptEmailStatus = 'failed';
       }
     } else {
       receiptEmailStatus = 'missing';
+    }
+
+    const smsMember = member && member.phone ? member : null;
+    if (smsMember && receipt) {
+      const smsBody =
+        receipt.receiptType === 'dues' && member
+          ? smsPaymentReceipt({
+              memberName: member.name,
+              amount: String(paymentAmount),
+              receiptId: receipt.receiptId,
+              groupName
+            })
+          : smsContributionReceipt({
+              receiptId: receipt.receiptId,
+              amount: String(paymentAmount),
+              groupName
+            });
+      const smsRes = await sendSmsIfAllowed({
+        tenant: req.tenant,
+        phone: smsMember.phone,
+        message: smsBody
+      });
+      if (smsRes.status === 'sent') receiptSmsStatus = 'sent';
+      else if (smsRes.status === 'failed') receiptSmsStatus = 'failed';
+      else if (smsRes.status === 'pending' || smsRes.status === 'missing') receiptSmsStatus = 'missing';
+      else receiptSmsStatus = smsRes.status || 'skipped';
     }
 
     if (req.user.role === 'admin') {
@@ -193,7 +222,8 @@ export const createContribution = async (req, res) => {
       },
       member: member || undefined,
       receipt: receipt ? { receiptId: receipt.receiptId, _id: receipt._id } : undefined,
-      email: { to: emailTo || null, status: receiptEmailStatus }
+      email: { to: emailTo || null, status: receiptEmailStatus },
+      sms: { to: member?.phone || null, status: receiptSmsStatus }
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

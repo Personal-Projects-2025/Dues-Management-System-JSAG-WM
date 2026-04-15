@@ -1,6 +1,7 @@
 import cron from 'node-cron';
-import { sendEmail } from '../utils/mailer.js';
 import { pickScriptureVerse, renderReminderEmail, renderReminderText } from '../utils/emailTemplates.js';
+import { sendEmailIfAllowed, sendSmsIfAllowed, tenantEmailAllowed, tenantSmsAllowed } from '../utils/notifyChannels.js';
+import { smsReminder } from '../utils/smsTemplates.js';
 import { getTenantModel } from '../models/Tenant.js';
 import { getTenantConnection } from '../utils/connectionManager.js';
 import { getTenantModels } from '../utils/tenantModels.js';
@@ -41,7 +42,23 @@ export const sendRemindersForTenant = async (tenantConnection, triggeredBy = 'sy
     throw new Error('Tenant models not initialized');
   }
 
-  const members = await Member.find({ email: { $ne: null } });
+  if (tenant?.config?.settings?.reminderEnabled === false) {
+    return {
+      processed: 0,
+      sent: 0,
+      failed: 0,
+      triggeredBy,
+      runAt: new Date(),
+      skipped: 'reminders_disabled'
+    };
+  }
+
+  const members = await Member.find({
+    $or: [
+      { email: { $nin: [null, ''] } },
+      { phone: { $nin: [null, ''] } }
+    ]
+  });
   let verseIndex = 0;
 
   let processed = 0;
@@ -61,9 +78,11 @@ export const sendRemindersForTenant = async (tenantConnection, triggeredBy = 'sy
     processed++;
 
     const verse = pickScriptureVerse(verseIndex++);
+    const reminderEmail = member.email || (member.phone ? `sms:${member.phone}` : '');
+
     const reminderData = {
       memberId: member._id,
-      email: member.email,
+      email: reminderEmail,
       amountOwed,
       monthsInArrears,
       scriptureRef: verse.reference,
@@ -71,39 +90,69 @@ export const sendRemindersForTenant = async (tenantConnection, triggeredBy = 'sy
       triggeredBy
     };
 
+    const monthName = new Date().toLocaleString('default', {
+      month: 'long',
+      year: 'numeric'
+    });
+
+    let emailOk = false;
+    let smsOk = false;
+
     try {
-      const monthName = new Date().toLocaleString('default', {
-        month: 'long',
-        year: 'numeric'
-      });
+      if (member.email && tenantEmailAllowed(tenant)) {
+        const er = await sendEmailIfAllowed({
+          tenant,
+          to: [member.email],
+          subject: `Monthly Dues Reminder — ${monthName} — ${groupName}`,
+          htmlContent: renderReminderEmail({
+            member,
+            amountOwed,
+            monthsInArrears,
+            verse,
+            groupName
+          }),
+          textContent: renderReminderText({
+            member,
+            amountOwed,
+            monthsInArrears,
+            verse,
+            groupName
+          }),
+          senderName: groupName
+        });
+        emailOk = !er.skipped;
+      }
 
-      await sendEmail({
-        to: [member.email],
-        subject: `Monthly Dues Reminder — ${monthName} — ${groupName}`,
-        htmlContent: renderReminderEmail({
-          member,
-          amountOwed,
-          monthsInArrears,
-          verse,
-          groupName
-        }),
-        textContent: renderReminderText({
-          member,
-          amountOwed,
-          monthsInArrears,
-          verse,
-          groupName
-        }),
-        senderName: groupName
-      });
+      if (member.phone && tenantSmsAllowed(tenant)) {
+        const smsRes = await sendSmsIfAllowed({
+          tenant,
+          phone: member.phone,
+          message: smsReminder({
+            memberName: member.name,
+            amountOwed: String(amountOwed.toFixed(2)),
+            monthsInArrears,
+            groupName
+          })
+        });
+        if (smsRes.status === 'sent') smsOk = true;
+      }
 
-      await Reminder.create({
-        ...reminderData,
-        status: 'sent'
-      });
-      sent++;
+      if (emailOk || smsOk) {
+        await Reminder.create({
+          ...reminderData,
+          status: 'sent'
+        });
+        sent++;
+      } else {
+        await Reminder.create({
+          ...reminderData,
+          status: 'failed',
+          error: 'No email/phone or notifications disabled'
+        });
+        failed++;
+      }
     } catch (error) {
-      console.error(`Reminder email failed for ${member.email}`, error);
+      console.error(`Reminder failed for ${member.email || member.phone}`, error);
       await Reminder.create({
         ...reminderData,
         status: 'failed',

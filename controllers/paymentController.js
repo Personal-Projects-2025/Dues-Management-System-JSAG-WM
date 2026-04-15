@@ -1,7 +1,8 @@
 import { getTenantModels } from '../utils/tenantModels.js';
 import { generateReceiptPDFFromReceipt } from '../utils/pdfGenerator.js';
-import { sendEmail } from '../utils/mailer.js';
 import { renderPaymentReceiptEmail, renderPaymentReceiptText } from '../utils/emailTemplates.js';
+import { sendSmsIfAllowed, sendEmailIfAllowed } from '../utils/notifyChannels.js';
+import { smsPaymentReceipt } from '../utils/smsTemplates.js';
 
 // Generate unique receipt ID
 const generateReceiptId = () => {
@@ -73,6 +74,9 @@ export const recordPayment = async (req, res) => {
     await receipt.save();
 
     let receiptEmailStatus = member.email ? 'pending' : 'missing';
+    let receiptSmsStatus = member.phone ? 'pending' : 'missing';
+
+    const groupName = req.tenant?.config?.branding?.name || req.tenant?.name || process.env.GROUP_NAME || 'Dues Accountant';
 
     if (member.email) {
       try {
@@ -87,8 +91,8 @@ export const recordPayment = async (req, res) => {
         } : null;
 
         const pdfBuffer = await generateReceiptPDFFromReceipt(receipt, member, tenantData, allReceipts);
-        const groupName = req.tenant?.config?.branding?.name || req.tenant?.name || process.env.GROUP_NAME || 'Dues Accountant';
-        await sendEmail({
+        const emailRes = await sendEmailIfAllowed({
+          tenant: req.tenant,
           to: [member.email],
           subject: `Your Dues Payment Receipt - ${groupName}`,
           htmlContent: renderPaymentReceiptEmail({ member, receipt, groupName }),
@@ -101,11 +105,29 @@ export const recordPayment = async (req, res) => {
           ],
           senderName: groupName
         });
-        receiptEmailStatus = 'sent';
+        receiptEmailStatus = emailRes.skipped ? 'skipped' : 'sent';
       } catch (emailError) {
         console.error('Failed to send receipt email', emailError);
         receiptEmailStatus = 'failed';
       }
+    }
+
+    if (member.phone) {
+      const smsBody = smsPaymentReceipt({
+        memberName: member.name,
+        amount: String(paymentAmount),
+        receiptId: receipt.receiptId,
+        groupName
+      });
+      const smsRes = await sendSmsIfAllowed({
+        tenant: req.tenant,
+        phone: member.phone,
+        message: smsBody
+      });
+      if (smsRes.status === 'sent') receiptSmsStatus = 'sent';
+      else if (smsRes.status === 'failed') receiptSmsStatus = 'failed';
+      else if (smsRes.status === 'disabled' || smsRes.status === 'skipped') receiptSmsStatus = 'skipped';
+      else receiptSmsStatus = smsRes.status || 'missing';
     }
 
     // Log activity (only for admin users)
@@ -135,6 +157,10 @@ export const recordPayment = async (req, res) => {
       email: {
         to: member.email || null,
         status: receiptEmailStatus
+      },
+      sms: {
+        to: member.phone || null,
+        status: receiptSmsStatus
       }
     });
   } catch (error) {

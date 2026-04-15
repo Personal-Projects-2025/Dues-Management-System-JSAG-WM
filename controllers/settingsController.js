@@ -23,6 +23,7 @@ export const getSettings = async (req, res) => {
       },
       settings: {
         emailNotifications: settings.emailNotifications ?? true,
+        smsNotifications: settings.smsNotifications ?? true,
         autoReceipts: settings.autoReceipts ?? true,
         reminderEnabled: settings.reminderEnabled ?? true,
         reminderDay: settings.reminderDay ?? 25,
@@ -52,6 +53,7 @@ export const updateSettings = async (req, res) => {
       appreciationEnabled,
       appreciationDelayMonths,
       emailNotifications,
+      smsNotifications,
       autoReceipts,
       brandingName,
     } = req.body;
@@ -94,6 +96,7 @@ export const updateSettings = async (req, res) => {
           ...(appreciationEnabled !== undefined ? { appreciationEnabled: Boolean(appreciationEnabled) } : {}),
           ...(appreciationDelayMonths !== undefined ? { appreciationDelayMonths: Number(appreciationDelayMonths) } : {}),
           ...(emailNotifications !== undefined ? { emailNotifications: Boolean(emailNotifications) } : {}),
+          ...(smsNotifications !== undefined ? { smsNotifications: Boolean(smsNotifications) } : {}),
           ...(autoReceipts !== undefined ? { autoReceipts: Boolean(autoReceipts) } : {}),
         },
       };
@@ -114,6 +117,7 @@ export const updateSettings = async (req, res) => {
       ...(appreciationEnabled !== undefined ? { appreciationEnabled: Boolean(appreciationEnabled) } : {}),
       ...(appreciationDelayMonths !== undefined ? { appreciationDelayMonths: Number(appreciationDelayMonths) } : {}),
       ...(emailNotifications !== undefined ? { emailNotifications: Boolean(emailNotifications) } : {}),
+      ...(smsNotifications !== undefined ? { smsNotifications: Boolean(smsNotifications) } : {}),
       ...(autoReceipts !== undefined ? { autoReceipts: Boolean(autoReceipts) } : {}),
     };
 

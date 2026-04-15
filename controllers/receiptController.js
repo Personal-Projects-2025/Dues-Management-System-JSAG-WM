@@ -1,8 +1,9 @@
 import { getTenantModels } from '../utils/tenantModels.js';
 import { generateReceiptPDFFromReceipt, generateContributionReceiptPDF } from '../utils/pdfGenerator.js';
-import { sendEmail } from '../utils/mailer.js';
+import { sendEmailIfAllowed, sendSmsIfAllowed } from '../utils/notifyChannels.js';
 import { renderPaymentReceiptEmail, renderPaymentReceiptText, renderContributionReceiptEmail, renderContributionReceiptText, renderRecorderReceiptEmail, renderRecorderReceiptText } from '../utils/emailTemplates.js';
 import { getUserModel } from '../models/User.js';
+import { smsPaymentReceipt, smsContributionReceipt } from '../utils/smsTemplates.js';
 
 // Generate unique receipt ID
 const generateReceiptId = () => {
@@ -154,6 +155,9 @@ export const resendReceiptEmail = async (req, res) => {
     } : null;
     const groupName = req.tenant?.config?.branding?.name || req.tenant?.name || process.env.GROUP_NAME || 'Dues Accountant';
 
+    let emailSent = false;
+    let smsSent = false;
+
     let emailTo = null;
     let recipientName = receipt.recordedBy;
     let pdfBuffer;
@@ -187,33 +191,67 @@ export const resendReceiptEmail = async (req, res) => {
       pdfBuffer = await generateReceiptPDFFromReceipt(receipt, member, tenantData, allReceipts);
     }
 
-    if (!emailTo) {
-      return res.status(400).json({ error: 'No email address available. The recorder must have an email on file.' });
-    }
-
-    if (sendToMember) {
-      await sendEmail({
-        to: [emailTo],
-        subject: `Your Dues Payment Receipt - ${groupName}`,
-        htmlContent: renderPaymentReceiptEmail({ member, receipt, groupName }),
-        textContent: renderPaymentReceiptText({ member, receipt, groupName }),
-        attachments: [{ name: `receipt-${receipt.receiptId}.pdf`, content: pdfBuffer }],
-        senderName: groupName
-      });
-    } else {
-      const paymentDescription = receipt.receiptType === 'dues' && receipt.memberName
-        ? `dues payment for ${receipt.memberName}` : (receipt.contributionTypeName || 'contribution');
-      await sendEmail({
-        to: [emailTo],
-        subject: `Receipt - ${groupName}`,
-        htmlContent: renderRecorderReceiptEmail({ receipt, recipientName, paymentDescription, groupName }),
-        textContent: renderRecorderReceiptText({ receipt, recipientName, paymentDescription, groupName }),
-        attachments: [{ name: `receipt-${receipt.receiptId}.pdf`, content: pdfBuffer }],
-        senderName: groupName
+    if (!emailTo && !(sendToMember && member?.phone)) {
+      return res.status(400).json({
+        error: 'No email or member phone on file. Add an email or phone for the member to resend.'
       });
     }
 
-    res.json({ message: 'Receipt email sent successfully' });
+    if (emailTo) {
+      if (sendToMember) {
+        const r = await sendEmailIfAllowed({
+          tenant: req.tenant,
+          to: [emailTo],
+          subject: `Your Dues Payment Receipt - ${groupName}`,
+          htmlContent: renderPaymentReceiptEmail({ member, receipt, groupName }),
+          textContent: renderPaymentReceiptText({ member, receipt, groupName }),
+          attachments: [{ name: `receipt-${receipt.receiptId}.pdf`, content: pdfBuffer }],
+          senderName: groupName
+        });
+        if (!r.skipped) emailSent = true;
+      } else {
+        const paymentDescription = receipt.receiptType === 'dues' && receipt.memberName
+          ? `dues payment for ${receipt.memberName}` : (receipt.contributionTypeName || 'contribution');
+        const r = await sendEmailIfAllowed({
+          tenant: req.tenant,
+          to: [emailTo],
+          subject: `Receipt - ${groupName}`,
+          htmlContent: renderRecorderReceiptEmail({ receipt, recipientName, paymentDescription, groupName }),
+          textContent: renderRecorderReceiptText({ receipt, recipientName, paymentDescription, groupName }),
+          attachments: [{ name: `receipt-${receipt.receiptId}.pdf`, content: pdfBuffer }],
+          senderName: groupName
+        });
+        if (!r.skipped) emailSent = true;
+      }
+    }
+
+    if (sendToMember && member?.phone) {
+      const smsBody =
+        receipt.receiptType === 'dues'
+          ? smsPaymentReceipt({
+              memberName: member.name,
+              amount: String(receipt.amount),
+              receiptId: receipt.receiptId,
+              groupName
+            })
+          : smsContributionReceipt({
+              receiptId: receipt.receiptId,
+              amount: String(receipt.amount),
+              groupName
+            });
+      const smsRes = await sendSmsIfAllowed({
+        tenant: req.tenant,
+        phone: member.phone,
+        message: smsBody
+      });
+      if (smsRes.status === 'sent') smsSent = true;
+    }
+
+    res.json({
+      message: emailSent || smsSent ? 'Receipt notification sent' : 'Nothing sent',
+      email: emailSent,
+      sms: smsSent
+    });
   } catch (error) {
     console.error('Failed to resend receipt email', error);
     res.status(500).json({ error: 'Failed to send receipt email' });

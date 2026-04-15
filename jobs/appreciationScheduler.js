@@ -6,8 +6,9 @@
  *   - If today >= completionDate + appreciationDelayMonths AND no log entry yet → sends email
  */
 import cron from 'node-cron';
-import { sendEmail } from '../utils/mailer.js';
+import { sendEmailIfAllowed, sendSmsIfAllowed, tenantEmailAllowed, tenantSmsAllowed } from '../utils/notifyChannels.js';
 import { renderAppreciationEmail, renderAppreciationText } from '../utils/emailTemplates.js';
+import { smsAppreciation } from '../utils/smsTemplates.js';
 import { getTenantModel } from '../models/Tenant.js';
 import { getTenantConnection } from '../utils/connectionManager.js';
 import { getTenantModel as getTenantModelUtil } from '../utils/modelFactory.js';
@@ -63,7 +64,10 @@ export const sendAppreciationsForTenant = async (tenantConnection, tenant) => {
 
   const eligibleMembers = await Member.find({
     monthsCovered: { $gte: FULL_PAYMENT_MONTHS },
-    email: { $ne: null, $exists: true },
+    $or: [
+      { email: { $nin: [null, ''] } },
+      { phone: { $nin: [null, ''] } }
+    ]
   });
 
   let sent = 0;
@@ -71,7 +75,7 @@ export const sendAppreciationsForTenant = async (tenantConnection, tenant) => {
   let failed = 0;
 
   for (const member of eligibleMembers) {
-    if (!member.email) { skipped++; continue; }
+    if (!member.email && !member.phone) { skipped++; continue; }
 
     const completionDate = findCompletionDate(member);
     if (!completionDate) { skipped++; continue; }
@@ -85,25 +89,46 @@ export const sendAppreciationsForTenant = async (tenantConnection, tenant) => {
     if (alreadySent) { skipped++; continue; }
 
     try {
-      await sendEmail({
-        to: member.email,
-        subject: `A heartfelt thank you — ${groupName}`,
-        html: renderAppreciationEmail({ member, groupName, monthsCompleted: FULL_PAYMENT_MONTHS }),
-        text: renderAppreciationText({ member, groupName, monthsCompleted: FULL_PAYMENT_MONTHS }),
-        senderName: groupName,
-      });
+      let emailOk = false;
+      let smsOk = false;
+
+      if (member.email && tenantEmailAllowed(tenant)) {
+        const er = await sendEmailIfAllowed({
+          tenant,
+          to: member.email,
+          subject: `A heartfelt thank you — ${groupName}`,
+          html: renderAppreciationEmail({ member, groupName, monthsCompleted: FULL_PAYMENT_MONTHS }),
+          text: renderAppreciationText({ member, groupName, monthsCompleted: FULL_PAYMENT_MONTHS }),
+          senderName: groupName,
+        });
+        emailOk = !er.skipped;
+      }
+
+      if (member.phone && tenantSmsAllowed(tenant)) {
+        const smsRes = await sendSmsIfAllowed({
+          tenant,
+          phone: member.phone,
+          message: smsAppreciation({ memberName: member.name, groupName })
+        });
+        if (smsRes.status === 'sent') smsOk = true;
+      }
+
+      if (!emailOk && !smsOk) {
+        skipped++;
+        continue;
+      }
 
       await AppreciationLog.create({
         memberId: member._id,
         memberName: member.name,
-        email: member.email,
+        email: member.email || (member.phone ? `sms:${member.phone}` : ''),
         delayMonths,
         completionDate,
       });
 
       sent++;
     } catch (error) {
-      console.error(`Appreciation email failed for ${member.email}:`, error.message);
+      console.error(`Appreciation failed for ${member.email || member.phone}:`, error.message);
       failed++;
     }
   }
