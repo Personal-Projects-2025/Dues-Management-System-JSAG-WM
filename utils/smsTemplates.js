@@ -13,15 +13,23 @@ export function smsTenantRegistrationWelcome({ tenantName, groupLabel = 'Dues Ac
   return `Welcome to ${groupLabel}. Registration for "${name}" was received and is pending approval.`;
 }
 
-export function smsPaymentReceipt({ memberName, amount, receiptId, groupName }) {
+export function smsPaymentReceipt({ memberName, amount, receiptId, groupName, previewUrl }) {
   const g = (groupName || 'Dues').slice(0, 40);
   const n = (memberName || 'Member').slice(0, 40);
-  return `${g}: Payment of ${amount} received for ${n}. Receipt ${receiptId}. Thank you.`;
+  let msg = `${g}: Payment of ${amount} received for ${n}. Receipt ${receiptId}. Thank you.`;
+  if (previewUrl) {
+    msg += ` View: ${previewUrl}`;
+  }
+  return msg;
 }
 
-export function smsContributionReceipt({ receiptId, amount, groupName }) {
+export function smsContributionReceipt({ receiptId, amount, groupName, previewUrl }) {
   const g = (groupName || 'Dues').slice(0, 40);
-  return `${g}: Contribution ${amount} recorded. Receipt ${receiptId}. Thank you.`;
+  let msg = `${g}: Contribution ${amount} recorded. Receipt ${receiptId}. Thank you.`;
+  if (previewUrl) {
+    msg += ` View: ${previewUrl}`;
+  }
+  return msg;
 }
 
 export function smsReminder({ memberName, amountOwed, monthsInArrears, groupName }) {

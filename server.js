@@ -163,6 +163,12 @@ const initializeServer = async () => {
       }
     }
 
+    // Public receipt PDF by secret token (SMS links; no auth)
+    if (!useSupabase()) {
+      const { getPublicReceiptPdf } = await import('./controllers/publicReceiptController.js');
+      app.get('/api/public/receipt/:token/pdf', getPublicReceiptPdf);
+    }
+
     // Routes
     app.use('/api/auth', authRoutes);
     app.use('/api/members', memberRoutes);

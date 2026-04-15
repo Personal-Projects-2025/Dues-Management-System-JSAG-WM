@@ -3,6 +3,8 @@ import { generateReceiptPDFFromReceipt } from '../utils/pdfGenerator.js';
 import { renderPaymentReceiptEmail, renderPaymentReceiptText } from '../utils/emailTemplates.js';
 import { sendSmsIfAllowed, sendEmailIfAllowed } from '../utils/notifyChannels.js';
 import { smsPaymentReceipt } from '../utils/smsTemplates.js';
+import { upsertReceiptPublicLink, buildReceiptPreviewUrlForSms } from '../utils/receiptPublicLink.js';
+import { useSupabase } from '../config/supabase.js';
 
 // Generate unique receipt ID
 const generateReceiptId = () => {
@@ -113,11 +115,18 @@ export const recordPayment = async (req, res) => {
     }
 
     if (member.phone) {
+      const dbName = req.tenant?.databaseName || req.databaseName;
+      let previewUrl = null;
+      if (!useSupabase() && dbName && receipt.receiptId) {
+        const token = await upsertReceiptPublicLink(dbName, receipt.receiptId);
+        previewUrl = buildReceiptPreviewUrlForSms(token);
+      }
       const smsBody = smsPaymentReceipt({
         memberName: member.name,
         amount: String(paymentAmount),
         receiptId: receipt.receiptId,
-        groupName
+        groupName,
+        previewUrl
       });
       const smsRes = await sendSmsIfAllowed({
         tenant: req.tenant,

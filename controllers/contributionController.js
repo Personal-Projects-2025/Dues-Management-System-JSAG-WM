@@ -4,6 +4,8 @@ import { sendEmailIfAllowed, sendSmsIfAllowed } from '../utils/notifyChannels.js
 import { renderPaymentReceiptEmail, renderPaymentReceiptText, renderContributionReceiptEmail, renderContributionReceiptText } from '../utils/emailTemplates.js';
 import { getUserModel } from '../models/User.js';
 import { smsPaymentReceipt, smsContributionReceipt } from '../utils/smsTemplates.js';
+import { upsertReceiptPublicLink, buildReceiptPreviewUrlForSms } from '../utils/receiptPublicLink.js';
+import { useSupabase } from '../config/supabase.js';
 
 const generateReceiptId = () => {
   const now = new Date();
@@ -180,18 +182,26 @@ export const createContribution = async (req, res) => {
 
     const smsMember = member && member.phone ? member : null;
     if (smsMember && receipt) {
+      const dbName = req.tenant?.databaseName || req.databaseName;
+      let previewUrl = null;
+      if (!useSupabase() && dbName && receipt.receiptId) {
+        const token = await upsertReceiptPublicLink(dbName, receipt.receiptId);
+        previewUrl = buildReceiptPreviewUrlForSms(token);
+      }
       const smsBody =
         receipt.receiptType === 'dues' && member
           ? smsPaymentReceipt({
               memberName: member.name,
               amount: String(paymentAmount),
               receiptId: receipt.receiptId,
-              groupName
+              groupName,
+              previewUrl
             })
           : smsContributionReceipt({
               receiptId: receipt.receiptId,
               amount: String(paymentAmount),
-              groupName
+              groupName,
+              previewUrl
             });
       const smsRes = await sendSmsIfAllowed({
         tenant: req.tenant,
