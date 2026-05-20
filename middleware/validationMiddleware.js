@@ -21,9 +21,17 @@ export const cleanEmptyStrings = (req, res, next) => {
 export const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    const arr = errors.array();
+    const messages = [...new Set(arr.map((e) => (e.msg || e.message || '').trim()).filter(Boolean))];
+    const error =
+      messages.length === 0
+        ? 'Please check your input and try again.'
+        : messages.length === 1
+          ? messages[0]
+          : messages.join(' • ');
     return res.status(400).json({
-      error: 'Validation failed',
-      details: errors.array(),
+      error,
+      details: arr,
     });
   }
   next();
