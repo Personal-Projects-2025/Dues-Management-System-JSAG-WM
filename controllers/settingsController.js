@@ -1,5 +1,6 @@
 import { useSupabase } from '../config/supabase.js';
 import { getTenantModel } from '../models/Tenant.js';
+import { syncBrandingNameWithTenantName } from '../utils/tenantDisplayName.js';
 import * as masterDb from '../db/masterDb.js';
 
 /**
@@ -87,7 +88,7 @@ export const updateSettings = async (req, res) => {
         ...existingCfg,
         branding: {
           ...existingBranding,
-          ...(brandingName !== undefined ? { name: brandingName } : {}),
+          ...(brandingName !== undefined ? { name: String(brandingName).trim() } : {}),
         },
         settings: {
           ...existingSettings,
@@ -101,7 +102,12 @@ export const updateSettings = async (req, res) => {
         },
       };
 
-      await masterDb.updateTenant(tenantId, { config: updatedConfig });
+      const tenantUpdates = { config: updatedConfig };
+      if (brandingName !== undefined) {
+        tenantUpdates.name = String(brandingName).trim();
+      }
+
+      await masterDb.updateTenant(tenantId, tenantUpdates);
       return res.json({ message: 'Settings updated successfully', config: updatedConfig });
     }
 
@@ -121,16 +127,18 @@ export const updateSettings = async (req, res) => {
       ...(autoReceipts !== undefined ? { autoReceipts: Boolean(autoReceipts) } : {}),
     };
 
-    const updatedBranding = {
-      ...existingBranding,
-      ...(brandingName !== undefined ? { name: brandingName } : {}),
-    };
-
     const Tenant = await getTenantModel();
     const tenantDoc = await Tenant.findById(req.tenantId || tenant._id || tenant.id);
     if (!tenantDoc) return res.status(404).json({ error: 'Tenant not found' });
 
-    tenantDoc.config = { ...existingCfg, settings: updatedSettings, branding: updatedBranding };
+    if (brandingName !== undefined) {
+      syncBrandingNameWithTenantName(tenantDoc, brandingName);
+    }
+
+    tenantDoc.config = {
+      ...(tenantDoc.config || existingCfg),
+      settings: updatedSettings,
+    };
     await tenantDoc.save();
 
     res.json({ message: 'Settings updated successfully', config: tenantDoc.config });

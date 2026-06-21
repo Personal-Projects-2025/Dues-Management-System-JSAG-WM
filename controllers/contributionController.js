@@ -5,6 +5,7 @@ import { renderPaymentReceiptEmail, renderPaymentReceiptText, renderContribution
 import { getUserModel } from '../models/User.js';
 import { smsPaymentReceipt, smsContributionReceipt } from '../utils/smsTemplates.js';
 import { upsertReceiptPublicLink, buildReceiptPreviewUrlForSms } from '../utils/receiptPublicLink.js';
+import { getTenantDisplayName } from '../utils/tenantDisplayName.js';
 import { useSupabase } from '../config/supabase.js';
 
 const generateReceiptId = () => {
@@ -85,7 +86,7 @@ export const createContribution = async (req, res) => {
       config: req.tenant.config,
       contact: req.tenant.contact || {}
     } : null;
-    const groupName = req.tenant?.config?.branding?.name || req.tenant?.name || process.env.GROUP_NAME || 'Dues Accountant';
+    const groupName = getTenantDisplayName(req.tenant);
 
     let receiptId = generateReceiptId();
     let retries = 0;

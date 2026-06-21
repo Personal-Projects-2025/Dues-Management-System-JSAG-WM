@@ -83,6 +83,7 @@ const createSystemUser = async () => {
     const passwordHash = await bcrypt.hash(password, 10);
     const systemUser = new User({
       username,
+      email: systemOwnerEmail,
       passwordHash,
       role: 'system',
       tenantId: null // System users don't have tenantId

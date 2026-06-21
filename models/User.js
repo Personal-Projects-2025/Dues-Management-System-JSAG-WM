@@ -21,8 +21,7 @@ const userSchema = new mongoose.Schema({
     sparse: true, // Allows multiple null values
     lowercase: true,
     trim: true,
-    match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email address'],
-    default: null
+    match: [/^\S+@\S+\.\S+$/, 'Please enter a valid email address']
   },
   phone: {
     type: String,

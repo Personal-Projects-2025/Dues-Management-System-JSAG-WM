@@ -4,6 +4,7 @@ import { getUserModel } from '../models/User.js';
 import { getTenantConnection } from '../utils/connectionManager.js';
 import { initializeTenantSchema } from '../scripts/initializeTenantSchema.js';
 import { validateRegistrationSessionForFinalize } from './tenantRegistrationOtpController.js';
+import { getTenantDisplayName } from '../utils/tenantDisplayName.js';
 import { sendSms, normalizeGhanaPhone } from '../utils/smsNotifyGh.js';
 import { smsTenantRegistrationWelcome } from '../utils/smsTemplates.js';
 
@@ -124,7 +125,7 @@ export const registerTenant = async (req, res) => {
       status: 'pending',
       config: {
         branding: {
-          name: branding?.name || name,
+          name: name,
           logo: branding?.logo || '',
           primaryColor: branding?.primaryColor || '#3B82F6',
           secondaryColor: branding?.secondaryColor || '#1E40AF'
@@ -296,7 +297,7 @@ export const registerTenant = async (req, res) => {
       try {
         const to = normalizeGhanaPhone(contactPhone);
         if (to) {
-          const groupLabel = tenant.config?.branding?.name || tenant.name || 'Dues Accountant';
+          const groupLabel = getTenantDisplayName(tenant);
           await sendSms({
             to,
             message: smsTenantRegistrationWelcome({ tenantName: tenant.name, groupLabel })

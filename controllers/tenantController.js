@@ -1,6 +1,6 @@
 import { getTenantModel } from '../models/Tenant.js';
 import { getUserModel } from '../models/User.js';
-import { getTenantConnection } from '../utils/connectionManager.js';
+import { syncBrandingNameWithTenantName } from '../utils/tenantDisplayName.js';
 
 /**
  * Get all tenants (super admin only, limited metadata)
@@ -181,7 +181,9 @@ export const updateTenant = async (req, res) => {
     }
 
     // Update allowed fields
-    if (name) tenant.name = name;
+    if (name) {
+      syncBrandingNameWithTenantName(tenant, name);
+    }
     if (status && ['active', 'inactive', 'archived'].includes(status)) {
       tenant.status = status;
       if (status === 'archived') {

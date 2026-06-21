@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import { getTenantDisplayName } from './tenantDisplayName.js';
 
 // Helper function to format date as "January 3, 2026"
 const formatDateRenderStyle = (date) => {
@@ -400,7 +401,7 @@ export const generateContributionReceiptPDF = (receiptData, tenantData = null) =
       const margin = 50;
       let currentY = margin + 20;
 
-      const tenantName = tenantData?.config?.branding?.name || tenantData?.name || '';
+      const tenantName = getTenantDisplayName(tenantData, '');
       const tenantAddress = tenantData?.contact?.address || '';
       const tenantEmail = tenantData?.contact?.email || '';
       const tenantPhone = tenantData?.contact?.phone || '';
@@ -599,7 +600,7 @@ export const generateReceiptPDFFromReceipt = (receiptData, memberData, tenantDat
       let currentY = margin + 20;
 
       // Extract tenant information and colors
-      const tenantName = tenantData?.config?.branding?.name || tenantData?.name || '';
+      const tenantName = getTenantDisplayName(tenantData, '');
       const tenantAddress = tenantData?.contact?.address || '';
       const tenantEmail = tenantData?.contact?.email || '';
       const tenantPhone = tenantData?.contact?.phone || '';

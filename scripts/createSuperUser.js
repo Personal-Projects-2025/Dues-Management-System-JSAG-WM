@@ -32,6 +32,7 @@ const createSuperUser = async () => {
       passwordHash,
       role,
       tenantId: null // Will be assigned to demo tenant by middleware
+      // email intentionally omitted — avoids unique-index conflict on null
     });
 
     await user.save();

@@ -8,6 +8,7 @@
 import cron from 'node-cron';
 import { sendEmailIfAllowed, sendSmsIfAllowed, tenantEmailAllowed, tenantSmsAllowed } from '../utils/notifyChannels.js';
 import { renderAppreciationEmail, renderAppreciationText } from '../utils/emailTemplates.js';
+import { getTenantDisplayName } from '../utils/tenantDisplayName.js';
 import { smsAppreciation } from '../utils/smsTemplates.js';
 import { getTenantModel } from '../models/Tenant.js';
 import { getTenantConnection } from '../utils/connectionManager.js';
@@ -58,7 +59,7 @@ export const sendAppreciationsForTenant = async (tenantConnection, tenant) => {
   const AppreciationLog = getTenantModelUtil(tenantConnection, 'AppreciationLog', appreciationLogSchema);
 
   const delayMonths = tenant?.config?.settings?.appreciationDelayMonths ?? 3;
-  const groupName = tenant?.config?.branding?.name || tenant?.name || 'Dues Accountant';
+  const groupName = getTenantDisplayName(tenant);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 

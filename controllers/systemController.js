@@ -4,6 +4,7 @@ import { getUserModel } from '../models/User.js';
 import { getTenantModel } from '../models/Tenant.js';
 import { useSupabase } from '../config/supabase.js';
 import * as masterDb from '../db/masterDb.js';
+import { getTenantDisplayName } from '../utils/tenantDisplayName.js';
 
 /**
  * Get all System Users
@@ -165,7 +166,7 @@ export const createSystemUser = async (req, res) => {
         const Tenant = await getTenantModel();
         const tenant = await Tenant.findById(tenantId);
         if (tenant) {
-          senderName = tenant.config?.branding?.name || tenant.name || 'Dues Accountant';
+          senderName = getTenantDisplayName(tenant);
         }
       }
 

@@ -4,6 +4,7 @@ import { renderPaymentReceiptEmail, renderPaymentReceiptText } from '../utils/em
 import { sendSmsIfAllowed, sendEmailIfAllowed } from '../utils/notifyChannels.js';
 import { smsPaymentReceipt } from '../utils/smsTemplates.js';
 import { upsertReceiptPublicLink, buildReceiptPreviewUrlForSms } from '../utils/receiptPublicLink.js';
+import { getTenantDisplayName } from '../utils/tenantDisplayName.js';
 import { useSupabase } from '../config/supabase.js';
 
 // Generate unique receipt ID
@@ -78,7 +79,7 @@ export const recordPayment = async (req, res) => {
     let receiptEmailStatus = member.email ? 'pending' : 'missing';
     let receiptSmsStatus = member.phone ? 'pending' : 'missing';
 
-    const groupName = req.tenant?.config?.branding?.name || req.tenant?.name || process.env.GROUP_NAME || 'Dues Accountant';
+    const groupName = getTenantDisplayName(req.tenant);
 
     if (member.email) {
       try {

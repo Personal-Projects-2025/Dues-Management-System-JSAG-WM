@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { pickScriptureVerse, renderReminderEmail, renderReminderText } from '../utils/emailTemplates.js';
+import { getTenantDisplayName } from '../utils/tenantDisplayName.js';
 import { sendEmailIfAllowed, sendSmsIfAllowed, tenantEmailAllowed, tenantSmsAllowed } from '../utils/notifyChannels.js';
 import { smsReminder } from '../utils/smsTemplates.js';
 import { getTenantModel } from '../models/Tenant.js';
@@ -65,7 +66,7 @@ export const sendRemindersForTenant = async (tenantConnection, triggeredBy = 'sy
   let sent = 0;
   let failed = 0;
 
-  const groupName = tenant?.config?.branding?.name || tenant?.name || 'Dues Accountant';
+  const groupName = getTenantDisplayName(tenant);
 
   for (let i = 0; i < members.length; i++) {
     const member = members[i];
