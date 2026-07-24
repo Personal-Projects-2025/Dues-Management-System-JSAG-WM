@@ -2,6 +2,7 @@ import { useSupabase } from '../config/supabase.js';
 import { getTenantModel } from '../models/Tenant.js';
 import { syncBrandingNameWithTenantName } from '../utils/tenantDisplayName.js';
 import * as masterDb from '../db/masterDb.js';
+import { PAYMENT_METHODS, isAllowedPaymentMethod } from '../constants/paymentMethods.js';
 
 const SMS_FIELD_MAX = 100;
 
@@ -29,6 +30,9 @@ const validateSmsPaymentSettings = (settings) => {
   if (!String(settings.paymentMethod || '').trim()) {
     return 'Payment method is required when SMS reminders are enabled';
   }
+  if (!isAllowedPaymentMethod(settings.paymentMethod)) {
+    return `Payment method must be one of: ${PAYMENT_METHODS.join(', ')}`;
+  }
   if (!String(settings.paymentAccount || '').trim()) {
     return 'Payment account is required when SMS reminders are enabled';
   }
@@ -54,6 +58,7 @@ export const getSettings = async (req, res) => {
         primaryColor: branding.primaryColor || '#3B82F6',
         secondaryColor: branding.secondaryColor || '#1E40AF',
       },
+      paymentMethods: PAYMENT_METHODS,
       settings: {
         emailNotifications: settings.emailNotifications ?? true,
         smsNotifications: settings.smsNotifications ?? true,

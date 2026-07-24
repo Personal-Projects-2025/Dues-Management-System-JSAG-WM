@@ -286,6 +286,94 @@ export const setTenantContext = async (req, res, next) => {
   }
 };
 
+const applyTenantStatusChecks = (tenant, req, res) => {
+  if (tenant.status === 'rejected') {
+    res.status(403).json({
+      error: 'Your organization registration has been rejected',
+      status: tenant.status,
+      rejectionReason: tenant.rejectionReason || 'No reason provided',
+    });
+    return false;
+  }
+  if (tenant.status === 'pending') req.isPendingTenant = true;
+  if (tenant.status !== 'active' && tenant.status !== 'pending') {
+    res.status(403).json({ error: 'Tenant is not active', status: tenant.status });
+    return false;
+  }
+  if (tenant.deletedAt) {
+    res.status(403).json({ error: 'Tenant has been deleted' });
+    return false;
+  }
+  return true;
+};
+
+/**
+ * Loads tenant metadata from the master database only (no tenant DB connection).
+ * Use for routes like settings that do not need tenant-scoped data stores.
+ */
+export const setTenantMasterOnly = async (req, res, next) => {
+  try {
+    let tenantId = req.user?.tenantId;
+
+    if (req.user?.role === 'system') {
+      return res.status(403).json({ error: 'System users cannot access tenant settings here' });
+    }
+
+    if (useSupabase()) {
+      if (!tenantId && req.user?.userId) {
+        const user = await masterDb.getUserById(req.user.userId);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+        tenantId = user.tenantId || null;
+      }
+      if (!tenantId) {
+        return res.status(400).json({
+          error: 'Tenant ID is required. Please log out and log back in to refresh your session.',
+        });
+      }
+      const tenant = await masterDb.getTenantById(tenantId);
+      if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+      if (!applyTenantStatusChecks(tenant, req, res)) return;
+      req.tenant = tenant;
+      req.tenantId = tenant.id;
+      return next();
+    }
+
+    const Tenant = await getTenantModel();
+
+    if (!tenantId && req.user?.userId) {
+      const { getUserModel } = await import('../models/User.js');
+      const User = await getUserModel();
+      const user = await User.findById(req.user.userId);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      tenantId = user.tenantId ? user.tenantId.toString() : null;
+    }
+
+    if (tenantId && typeof tenantId !== 'string') {
+      tenantId = tenantId.toString();
+    }
+
+    if (!tenantId) {
+      return res.status(400).json({
+        error: 'Tenant ID is required. Please log out and log back in to refresh your session.',
+      });
+    }
+
+    const tenant = await Tenant.findById(tenantId);
+    if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+    if (!applyTenantStatusChecks(tenant, req, res)) return;
+
+    req.tenant = tenant;
+    req.tenantId = tenantId;
+    next();
+  } catch (error) {
+    console.error('Tenant master-only middleware error:', error);
+    res.status(500).json({
+      error: 'Failed to load organization settings',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+};
+
 /**
  * Middleware to require tenant context (for routes that need tenant data)
  */
