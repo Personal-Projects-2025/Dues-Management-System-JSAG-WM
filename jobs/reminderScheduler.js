@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { pickScriptureVerse, renderReminderEmail, renderReminderText } from '../utils/emailTemplates.js';
 import { getTenantDisplayName } from '../utils/tenantDisplayName.js';
 import { sendEmailIfAllowed, sendSmsIfAllowed, tenantEmailAllowed, tenantSmsAllowed } from '../utils/notifyChannels.js';
-import { smsReminder } from '../utils/smsTemplates.js';
+import { smsContributionReminder, extractMemberFirstName } from '../utils/smsTemplates.js';
 import { getTenantModel } from '../models/Tenant.js';
 import { getTenantConnection } from '../utils/connectionManager.js';
 import { getTenantModels } from '../utils/tenantModels.js';
@@ -67,6 +67,14 @@ export const sendRemindersForTenant = async (tenantConnection, triggeredBy = 'sy
   let failed = 0;
 
   const groupName = getTenantDisplayName(tenant);
+  const settings = tenant?.config?.settings || {};
+  const currency = process.env.CURRENCY_CODE || 'GHS';
+  const paymentMethod = String(settings.paymentMethod || '').trim();
+  const paymentAccount = String(settings.paymentAccount || '').trim();
+  const paymentAccountName = String(settings.paymentAccountName || '').trim();
+  const paymentReference = String(settings.paymentReference || 'Dues').trim() || 'Dues';
+  const closingBlessing = String(settings.closingBlessing || 'God bless you.').trim() || 'God bless you.';
+  const smsPaymentConfigured = Boolean(paymentMethod && paymentAccount);
 
   for (let i = 0; i < members.length; i++) {
     const member = members[i];
@@ -98,6 +106,7 @@ export const sendRemindersForTenant = async (tenantConnection, triggeredBy = 'sy
 
     let emailOk = false;
     let smsOk = false;
+    let smsError = null;
 
     try {
       if (member.email && tenantEmailAllowed(tenant)) {
@@ -125,17 +134,26 @@ export const sendRemindersForTenant = async (tenantConnection, triggeredBy = 'sy
       }
 
       if (member.phone && tenantSmsAllowed(tenant)) {
-        const smsRes = await sendSmsIfAllowed({
-          tenant,
-          phone: member.phone,
-          message: smsReminder({
-            memberName: member.name,
-            amountOwed: String(amountOwed.toFixed(2)),
-            monthsInArrears,
-            groupName
-          })
-        });
-        if (smsRes.status === 'sent') smsOk = true;
+        if (!smsPaymentConfigured) {
+          smsError = 'SMS payment details not configured';
+        } else {
+          const smsRes = await sendSmsIfAllowed({
+            tenant,
+            phone: member.phone,
+            message: smsContributionReminder({
+              tenantName: groupName,
+              memberFirstName: extractMemberFirstName(member.name),
+              outstandingAmount: amountOwed.toFixed(2),
+              currency,
+              paymentMethod,
+              paymentAccount,
+              paymentAccountName: paymentAccountName || undefined,
+              paymentReference,
+              closingBlessing,
+            }),
+          });
+          if (smsRes.status === 'sent') smsOk = true;
+        }
       }
 
       if (emailOk || smsOk) {
@@ -145,10 +163,14 @@ export const sendRemindersForTenant = async (tenantConnection, triggeredBy = 'sy
         });
         sent++;
       } else {
+        const failureReason = smsError
+          || (member.phone && tenantSmsAllowed(tenant) && !smsPaymentConfigured
+            ? 'SMS payment details not configured'
+            : 'No email/phone or notifications disabled');
         await Reminder.create({
           ...reminderData,
           status: 'failed',
-          error: 'No email/phone or notifications disabled'
+          error: failureReason
         });
         failed++;
       }

@@ -68,6 +68,11 @@ const tenantSchema = new mongoose.Schema({
       autoReceipts: { type: Boolean, default: true },
       reminderEnabled: { type: Boolean, default: true },
       reminderDay: { type: Number, default: 25, min: 1, max: 28 },
+      paymentMethod: { type: String, trim: true, default: '' },
+      paymentAccount: { type: String, trim: true, default: '' },
+      paymentAccountName: { type: String, trim: true, default: '' },
+      paymentReference: { type: String, trim: true, default: 'Dues' },
+      closingBlessing: { type: String, trim: true, default: 'God bless you.' },
       appreciationEnabled: { type: Boolean, default: false },
       appreciationDelayMonths: { type: Number, default: 3, min: 3, max: 6 }
     },

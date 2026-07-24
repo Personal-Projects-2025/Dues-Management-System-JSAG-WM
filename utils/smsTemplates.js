@@ -32,6 +32,59 @@ export function smsContributionReceipt({ receiptId, amount, groupName, previewUr
   return msg;
 }
 
+/** First trimmed word of a member's full name. */
+export function extractMemberFirstName(name) {
+  const first = String(name || '').trim().split(/\s+/)[0];
+  return first || 'Member';
+}
+
+/**
+ * Personalized contribution reminder SMS for members with outstanding dues.
+ * Keeps a warm, professional tone and omits optional fields when not provided.
+ */
+export function smsContributionReminder({
+  tenantName,
+  memberFirstName,
+  outstandingAmount,
+  currency,
+  paymentMethod,
+  paymentAccount,
+  paymentAccountName,
+  paymentReference = 'Dues',
+  closingBlessing = 'God bless you.',
+}) {
+  const org = (tenantName || 'Organization').trim();
+  const firstName = (memberFirstName || 'Member').trim();
+  const amount = String(outstandingAmount ?? '0.00');
+  const curr = (currency || 'GHS').trim();
+  const method = (paymentMethod || '').trim();
+  const account = (paymentAccount || '').trim();
+  const accountName = (paymentAccountName || '').trim();
+  const reference = (paymentReference || 'Dues').trim();
+  const blessing = (closingBlessing || 'God bless you.').trim();
+
+  const accountLabel = accountName ? `${account} (${accountName})` : account;
+
+  const lines = [
+    org,
+    '',
+    `Dear ${firstName},`,
+    '',
+    'Thank you for your continued support.',
+    '',
+    `Kindly be reminded of your outstanding dues of ${curr} ${amount}.`,
+    '',
+    `Contributions can be sent via ${method} to ${accountLabel}. Kindly use "${reference}" as the payment reference.`,
+    '',
+    blessing,
+    '',
+    `The ${org} Finance Committee`,
+  ];
+
+  return lines.join('\n');
+}
+
+/** @deprecated Use smsContributionReminder for dues reminders. */
 export function smsReminder({ memberName, amountOwed, monthsInArrears, groupName }) {
   const g = (groupName || 'Dues').slice(0, 36);
   const n = (memberName || 'Member').slice(0, 36);

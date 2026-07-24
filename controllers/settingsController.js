@@ -3,6 +3,38 @@ import { getTenantModel } from '../models/Tenant.js';
 import { syncBrandingNameWithTenantName } from '../utils/tenantDisplayName.js';
 import * as masterDb from '../db/masterDb.js';
 
+const SMS_FIELD_MAX = 100;
+
+const trimSmsField = (value, maxLen = SMS_FIELD_MAX) => {
+  if (value === undefined || value === null) return undefined;
+  return String(value).trim().slice(0, maxLen);
+};
+
+const buildPaymentSettingsPatch = (body) => {
+  const patch = {};
+  if (body.paymentMethod !== undefined) patch.paymentMethod = trimSmsField(body.paymentMethod) || '';
+  if (body.paymentAccount !== undefined) patch.paymentAccount = trimSmsField(body.paymentAccount) || '';
+  if (body.paymentAccountName !== undefined) patch.paymentAccountName = trimSmsField(body.paymentAccountName) || '';
+  if (body.paymentReference !== undefined) {
+    patch.paymentReference = trimSmsField(body.paymentReference, 50) || 'Dues';
+  }
+  if (body.closingBlessing !== undefined) {
+    patch.closingBlessing = trimSmsField(body.closingBlessing, 150) || 'God bless you.';
+  }
+  return patch;
+};
+
+const validateSmsPaymentSettings = (settings) => {
+  if (settings.smsNotifications !== true) return null;
+  if (!String(settings.paymentMethod || '').trim()) {
+    return 'Payment method is required when SMS reminders are enabled';
+  }
+  if (!String(settings.paymentAccount || '').trim()) {
+    return 'Payment account is required when SMS reminders are enabled';
+  }
+  return null;
+};
+
 /**
  * GET /api/settings
  * Returns the current tenant's configurable settings.
@@ -28,6 +60,11 @@ export const getSettings = async (req, res) => {
         autoReceipts: settings.autoReceipts ?? true,
         reminderEnabled: settings.reminderEnabled ?? true,
         reminderDay: settings.reminderDay ?? 25,
+        paymentMethod: settings.paymentMethod ?? '',
+        paymentAccount: settings.paymentAccount ?? '',
+        paymentAccountName: settings.paymentAccountName ?? '',
+        paymentReference: settings.paymentReference ?? 'Dues',
+        closingBlessing: settings.closingBlessing ?? 'God bless you.',
         appreciationEnabled: settings.appreciationEnabled ?? false,
         appreciationDelayMonths: settings.appreciationDelayMonths ?? 3,
       },
@@ -57,7 +94,20 @@ export const updateSettings = async (req, res) => {
       smsNotifications,
       autoReceipts,
       brandingName,
+      paymentMethod,
+      paymentAccount,
+      paymentAccountName,
+      paymentReference,
+      closingBlessing,
     } = req.body;
+
+    const paymentPatch = buildPaymentSettingsPatch({
+      paymentMethod,
+      paymentAccount,
+      paymentAccountName,
+      paymentReference,
+      closingBlessing,
+    });
 
     // Validate reminderDay
     if (reminderDay !== undefined) {
@@ -84,22 +134,30 @@ export const updateSettings = async (req, res) => {
       const existingSettings = existingCfg.settings || {};
       const existingBranding = existingCfg.branding || {};
 
+      const mergedSettings = {
+        ...existingSettings,
+        ...(reminderEnabled !== undefined ? { reminderEnabled: Boolean(reminderEnabled) } : {}),
+        ...(reminderDay !== undefined ? { reminderDay: Number(reminderDay) } : {}),
+        ...(appreciationEnabled !== undefined ? { appreciationEnabled: Boolean(appreciationEnabled) } : {}),
+        ...(appreciationDelayMonths !== undefined ? { appreciationDelayMonths: Number(appreciationDelayMonths) } : {}),
+        ...(emailNotifications !== undefined ? { emailNotifications: Boolean(emailNotifications) } : {}),
+        ...(smsNotifications !== undefined ? { smsNotifications: Boolean(smsNotifications) } : {}),
+        ...(autoReceipts !== undefined ? { autoReceipts: Boolean(autoReceipts) } : {}),
+        ...paymentPatch,
+      };
+
+      const smsValidationError = validateSmsPaymentSettings(mergedSettings);
+      if (smsValidationError) {
+        return res.status(400).json({ error: smsValidationError });
+      }
+
       const updatedConfig = {
         ...existingCfg,
         branding: {
           ...existingBranding,
           ...(brandingName !== undefined ? { name: String(brandingName).trim() } : {}),
         },
-        settings: {
-          ...existingSettings,
-          ...(reminderEnabled !== undefined ? { reminderEnabled: Boolean(reminderEnabled) } : {}),
-          ...(reminderDay !== undefined ? { reminderDay: Number(reminderDay) } : {}),
-          ...(appreciationEnabled !== undefined ? { appreciationEnabled: Boolean(appreciationEnabled) } : {}),
-          ...(appreciationDelayMonths !== undefined ? { appreciationDelayMonths: Number(appreciationDelayMonths) } : {}),
-          ...(emailNotifications !== undefined ? { emailNotifications: Boolean(emailNotifications) } : {}),
-          ...(smsNotifications !== undefined ? { smsNotifications: Boolean(smsNotifications) } : {}),
-          ...(autoReceipts !== undefined ? { autoReceipts: Boolean(autoReceipts) } : {}),
-        },
+        settings: mergedSettings,
       };
 
       const tenantUpdates = { config: updatedConfig };
@@ -125,7 +183,13 @@ export const updateSettings = async (req, res) => {
       ...(emailNotifications !== undefined ? { emailNotifications: Boolean(emailNotifications) } : {}),
       ...(smsNotifications !== undefined ? { smsNotifications: Boolean(smsNotifications) } : {}),
       ...(autoReceipts !== undefined ? { autoReceipts: Boolean(autoReceipts) } : {}),
+      ...paymentPatch,
     };
+
+    const smsValidationError = validateSmsPaymentSettings(updatedSettings);
+    if (smsValidationError) {
+      return res.status(400).json({ error: smsValidationError });
+    }
 
     const Tenant = await getTenantModel();
     const tenantDoc = await Tenant.findById(req.tenantId || tenant._id || tenant.id);
