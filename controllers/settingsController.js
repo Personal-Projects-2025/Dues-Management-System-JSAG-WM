@@ -1,10 +1,18 @@
 import { useSupabase } from '../config/supabase.js';
 import { getTenantModel } from '../models/Tenant.js';
-import { syncBrandingNameWithTenantName } from '../utils/tenantDisplayName.js';
 import * as masterDb from '../db/masterDb.js';
 import { PAYMENT_METHODS, isAllowedPaymentMethod } from '../constants/paymentMethods.js';
 
 const SMS_FIELD_MAX = 100;
+
+const toPlainObject = (value) => {
+  if (!value) return {};
+  if (typeof value.toObject === 'function') {
+    return value.toObject({ getters: false, virtuals: false });
+  }
+  if (typeof value === 'object') return { ...value };
+  return {};
+};
 
 const trimSmsField = (value, maxLen = SMS_FIELD_MAX) => {
   if (value === undefined || value === null) return undefined;
@@ -39,6 +47,52 @@ const validateSmsPaymentSettings = (settings) => {
   return null;
 };
 
+const buildUpdatedSettings = (existingSettings, body, paymentPatch) => {
+  const base = toPlainObject(existingSettings);
+  const {
+    reminderEnabled,
+    reminderDay,
+    appreciationEnabled,
+    appreciationDelayMonths,
+    emailNotifications,
+    smsNotifications,
+    autoReceipts,
+  } = body;
+
+  return {
+    emailNotifications:
+      emailNotifications !== undefined ? Boolean(emailNotifications) : (base.emailNotifications ?? true),
+    smsNotifications:
+      smsNotifications !== undefined ? Boolean(smsNotifications) : (base.smsNotifications ?? true),
+    autoReceipts:
+      autoReceipts !== undefined ? Boolean(autoReceipts) : (base.autoReceipts ?? true),
+    reminderEnabled:
+      reminderEnabled !== undefined ? Boolean(reminderEnabled) : (base.reminderEnabled ?? true),
+    reminderDay:
+      reminderDay !== undefined ? Number(reminderDay) : (base.reminderDay ?? 25),
+    appreciationEnabled:
+      appreciationEnabled !== undefined ? Boolean(appreciationEnabled) : (base.appreciationEnabled ?? false),
+    appreciationDelayMonths:
+      appreciationDelayMonths !== undefined
+        ? Number(appreciationDelayMonths)
+        : (base.appreciationDelayMonths ?? 3),
+    paymentMethod:
+      paymentPatch.paymentMethod !== undefined ? paymentPatch.paymentMethod : (base.paymentMethod ?? ''),
+    paymentAccount:
+      paymentPatch.paymentAccount !== undefined ? paymentPatch.paymentAccount : (base.paymentAccount ?? ''),
+    paymentAccountName:
+      paymentPatch.paymentAccountName !== undefined
+        ? paymentPatch.paymentAccountName
+        : (base.paymentAccountName ?? ''),
+    paymentReference:
+      paymentPatch.paymentReference !== undefined ? paymentPatch.paymentReference : (base.paymentReference ?? 'Dues'),
+    closingBlessing:
+      paymentPatch.closingBlessing !== undefined
+        ? paymentPatch.closingBlessing
+        : (base.closingBlessing ?? 'God bless you.'),
+  };
+};
+
 /**
  * GET /api/settings
  * Returns the current tenant's configurable settings.
@@ -48,7 +102,7 @@ export const getSettings = async (req, res) => {
     const tenant = req.tenant;
     if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
 
-    const cfg = tenant.config || {};
+    const cfg = toPlainObject(tenant.config);
     const settings = cfg.settings || {};
     const branding = cfg.branding || {};
 
@@ -135,21 +189,11 @@ export const updateSettings = async (req, res) => {
       const existing = await masterDb.getTenantById(tenantId);
       if (!existing) return res.status(404).json({ error: 'Tenant not found' });
 
-      const existingCfg = existing.config || {};
+      const existingCfg = toPlainObject(existing.config);
       const existingSettings = existingCfg.settings || {};
       const existingBranding = existingCfg.branding || {};
 
-      const mergedSettings = {
-        ...existingSettings,
-        ...(reminderEnabled !== undefined ? { reminderEnabled: Boolean(reminderEnabled) } : {}),
-        ...(reminderDay !== undefined ? { reminderDay: Number(reminderDay) } : {}),
-        ...(appreciationEnabled !== undefined ? { appreciationEnabled: Boolean(appreciationEnabled) } : {}),
-        ...(appreciationDelayMonths !== undefined ? { appreciationDelayMonths: Number(appreciationDelayMonths) } : {}),
-        ...(emailNotifications !== undefined ? { emailNotifications: Boolean(emailNotifications) } : {}),
-        ...(smsNotifications !== undefined ? { smsNotifications: Boolean(smsNotifications) } : {}),
-        ...(autoReceipts !== undefined ? { autoReceipts: Boolean(autoReceipts) } : {}),
-        ...paymentPatch,
-      };
+      const mergedSettings = buildUpdatedSettings(existingSettings, req.body, paymentPatch);
 
       const smsValidationError = validateSmsPaymentSettings(mergedSettings);
       if (smsValidationError) {
@@ -174,22 +218,12 @@ export const updateSettings = async (req, res) => {
       return res.json({ message: 'Settings updated successfully', config: updatedConfig });
     }
 
-    // MongoDB path
-    const existingCfg = tenant.config || {};
+    // MongoDB path — use $set on nested settings to avoid subdocument save issues
+    const tenantId = req.tenantId || tenant._id?.toString?.() || tenant.id;
+    const existingCfg = toPlainObject(tenant.config);
     const existingSettings = existingCfg.settings || {};
-    const existingBranding = existingCfg.branding || {};
 
-    const updatedSettings = {
-      ...existingSettings,
-      ...(reminderEnabled !== undefined ? { reminderEnabled: Boolean(reminderEnabled) } : {}),
-      ...(reminderDay !== undefined ? { reminderDay: Number(reminderDay) } : {}),
-      ...(appreciationEnabled !== undefined ? { appreciationEnabled: Boolean(appreciationEnabled) } : {}),
-      ...(appreciationDelayMonths !== undefined ? { appreciationDelayMonths: Number(appreciationDelayMonths) } : {}),
-      ...(emailNotifications !== undefined ? { emailNotifications: Boolean(emailNotifications) } : {}),
-      ...(smsNotifications !== undefined ? { smsNotifications: Boolean(smsNotifications) } : {}),
-      ...(autoReceipts !== undefined ? { autoReceipts: Boolean(autoReceipts) } : {}),
-      ...paymentPatch,
-    };
+    const updatedSettings = buildUpdatedSettings(existingSettings, req.body, paymentPatch);
 
     const smsValidationError = validateSmsPaymentSettings(updatedSettings);
     if (smsValidationError) {
@@ -197,22 +231,31 @@ export const updateSettings = async (req, res) => {
     }
 
     const Tenant = await getTenantModel();
-    const tenantDoc = await Tenant.findById(req.tenantId || tenant._id || tenant.id);
-    if (!tenantDoc) return res.status(404).json({ error: 'Tenant not found' });
+    const updatePayload = {
+      'config.settings': updatedSettings,
+      updatedAt: new Date(),
+    };
 
     if (brandingName !== undefined) {
-      syncBrandingNameWithTenantName(tenantDoc, brandingName);
+      const trimmedName = String(brandingName).trim();
+      updatePayload.name = trimmedName;
+      updatePayload['config.branding.name'] = trimmedName;
     }
 
-    tenantDoc.config = {
-      ...(tenantDoc.config || existingCfg),
-      settings: updatedSettings,
-    };
-    await tenantDoc.save();
+    const updatedTenant = await Tenant.findByIdAndUpdate(
+      tenantId,
+      { $set: updatePayload },
+      { new: true, runValidators: true }
+    );
 
-    res.json({ message: 'Settings updated successfully', config: tenantDoc.config });
+    if (!updatedTenant) return res.status(404).json({ error: 'Tenant not found' });
+
+    res.json({ message: 'Settings updated successfully', config: updatedTenant.config });
   } catch (error) {
     console.error('updateSettings error:', error);
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(500).json({ error: error.message || 'Failed to update settings' });
   }
 };
